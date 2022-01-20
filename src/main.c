@@ -202,9 +202,9 @@ nc_Val eval_expr(nc_VarStackArr *stackArr, nc_VarsTable *v, char *expr, nc_Val l
             char tmp = *i;
             *i = 0;
             
-            nc_Val val = nc_get_var_val(v, var_name); 
+            nc_Val *val = nc_get_var_reffval(v, var_name); 
             *i = tmp;
-            return val;
+            return val == NULL? lastval: *val;
         } else if(*i == '.' || isdigit(*i)) {
             nc_Val retval = 0;
             sscanf(i, "%lf", &retval);
