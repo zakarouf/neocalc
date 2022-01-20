@@ -6,6 +6,8 @@ A small calculator with variables.
 - Uses Stack System; no linked list
 - Easy to implement your own operators (see `list_op` function in main.c)
 
+> neocalc is an evolution of the [calc](https://github.com/zakarouf/simple_calc) my first ever program.
+
 ---
 
 ## Building
