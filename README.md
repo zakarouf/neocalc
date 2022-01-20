@@ -15,11 +15,9 @@ A small calculator with variables.
 ### Requied Libraries
 
 #### libreadline
-**Used For**
 - REPL
 
 #### [z_](https://github.com/zakarouf/z_)
-**Used For**
   - String
   - Variables
   - Stack System
