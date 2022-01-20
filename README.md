@@ -1,6 +1,10 @@
 # NeoCalc
 
 A small calculator with variables.
+- Calculator
+- Lisp-like evaluation
+- Uses Stack System; no linked list
+- Easy to implement your own operators (see `list_op` function in main.c)
 
 ---
 
