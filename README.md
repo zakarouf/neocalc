@@ -1,5 +1,3 @@
-# NeoCalc
-
 <div align="center">
   <img src="docs/neocalc.png" width="600"/>
   <h1>neocalc</h1>
