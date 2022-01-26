@@ -1,6 +1,14 @@
 # NeoCalc
 
-A small calculator with variables.
+<div align="center">
+  <img src="docs/neocalc.png" width="600"/>
+  <h1>z_</h1>
+
+  A small lisp-like calculator with variables.
+</div>
+
+## Highlights
+
 - Calculator
 - Lisp-like evaluation
 - Uses Stack System; no linked list
