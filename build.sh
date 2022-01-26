@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 CC="cc"
-LDFLAGS="-I/opt/local/include -L/opt/local/lib -lzkcollection -lreadline"
+LDFLAGS="-lzkcollection -lreadline"
 OUT="nc"
 CFILES="$(find src -name '*.c')"
 

@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -7,10 +8,10 @@
 #include <z_/types/string.h>
 #include <z_/types/arr.h>
 #include <z_/types/hashhoyt.h>
-#include <z_/types/enum.h>
 #include <z_/imp/sys.h>
 
 #include <readline/readline.h>
+#include <readline/history.h>
 
 #define logprint(b, f, fmt, ...) z__log_cl256_full(b, f, fmt "\n" ,##__VA_ARGS__)
 #define logfprint(file, b, f, fmt, ...) z__logfile_cl256_full(file, b, f , fmt "\n" ,##__VA_ARGS__)
@@ -191,7 +192,6 @@ nc_Val eval_expr(nc_VarStackArr *stackArr, nc_VarsTable *v, char *expr, nc_Val l
     #endif
 
     char *t;
-    z__size len = strlen(expr);
     char *i = strtok_r(expr, " \n\t", &t);
     struct nc_VarStack *stack_cursor = &(stackArr)->data[0];
 
@@ -273,7 +273,7 @@ nc_Val eval_expr(nc_VarStackArr *stackArr, nc_VarsTable *v, char *expr, nc_Val l
 
     z__size length = z__Arr_getUsed((*stackArr));
     if(length > 0) {
-        for (int j = 1; j < length; j++) {
+        for (size_t j = 1; j < length; j++) {
             lastval = list_op(stack_cursor);
             stack_cursor = nc_VarStackArr_pop(stackArr);
             printf("- %p|\n", stack_cursor);
@@ -348,3 +348,4 @@ int main(void)
         return 0;
     }
 }
+
