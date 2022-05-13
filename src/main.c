@@ -8,18 +8,20 @@
 #include <z_/types/string.h>
 #include <z_/types/arr.h>
 #include <z_/types/hashhoyt.h>
-#include <z_/imp/sys.h>
+#include <z_/imp/print.h>
+
+#include <z_/prep/nm/ident.h>
 
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#define logprint(b, f, fmt, ...) z__log_cl256_full(b, f, fmt "\n" ,##__VA_ARGS__)
-#define logfprint(file, b, f, fmt, ...) z__logfile_cl256_full(file, b, f , fmt "\n" ,##__VA_ARGS__)
+#define logprint(b, f, fmt, ...) z__fprint_cl256(stdout, b, f, fmt "\n" ,##__VA_ARGS__)
+#define logfprint(file, b, f, fmt, ...) z__fprint_cl256(file, b, f , fmt "\n" ,##__VA_ARGS__)
 
 #define error_print(fmt, ...) logprint(0, 1, fmt ,##__VA_ARGS__)
-#define nc_print(color, fmt, ...) z__log_cl256(color, fmt "\n",##__VA_ARGS__)
+#define nc_print(color, fmt, ...) z__fprint_cl256f(stdout, color, fmt "\n",##__VA_ARGS__)
 
-#if HW_DEBUG == 1
+#if DEBUG == 1
     #define DP(b, f, fmt, ...) logprint(b, f, "DEBUG:: " fmt "\n" ,##__VA_ARGS__)
     #define DEBUG_CHECK(...) __VA_ARGS__
 #else 
@@ -38,12 +40,21 @@
 typedef z__f64 nc_Val;
 
 typedef z__HashHoyt(nc_Val) nc_VarsTable;
+typedef z__HashHoyt(z__String) nc_FnsTable;      
+
 typedef z__Arr(nc_Val) nc_VarList;
 struct nc_VarStack {
     nc_VarList vars;
     char op;
 };
 typedef z__Arr(struct nc_VarStack) nc_VarStackArr;
+
+
+typedef struct nc_State {
+    nc_VarsTable vars;
+    nc_FnsTable fns;
+    nc_VarStackArr stackArr;
+} nc_State;
 
 #define isparen_open(c)  ((c) == '(')
 #define isparen_close(c) ((c) == ')')
@@ -122,7 +133,7 @@ nc_Val list_op_mul(nc_VarList *vl)
     return tmp;
 }
 
-nc_Val list_op_div(nc_VarList *vl)
+nc_Val list_op_div(nc_VarList *vl) 
 {
     nc_Val tmp = z__Arr_getVal((*vl), 0);
     for (size_t i = 1; i < vl->lenUsed; i++) {
@@ -163,22 +174,30 @@ nc_Val nc_get_var_val(nc_VarsTable *v, const char *var)
     return 0;
 }
 
+
 typedef struct {
     nc_Val val;
     char const *name;
 } nc_Expr_Result;
 
-nc_Val eval_expr(nc_VarStackArr *stackArr, nc_VarsTable *v, char *expr, nc_Val lastval)
+nc_Val eval_expr(nc_VarStackArr *stackArr, nc_VarsTable *v, nc_FnsTable *fns, char *expr, nc_Val lastval)
 {
 
     #define next(i, n) { i += n; if(i >= expr.data+expr.lenUsed) { printf("GONE TO FAR"); exit(-1); }  }
     #define next_tok(i, t) { i = strtok_r(NULL, " \t\n", &t); }
 
     #if 0
-      #define ast_stackpush(s) { printf("|S:%u\n", (s)->lenUsed); }
-      #define ast_stackpop(s) { printf("|E:%u\n", (s)->lenUsed); }
-      #define ast_op(i) {printf(" |Operator: %c\n", i);}
-      #define ast_float(i) {printf("    |Float: %lf\n", i);}
+      int level = 0;
+      #define ast_stackpush(s) { printf("|Stack Push:%u\n", (s)->lenUsed); level += 1; }
+      #define ast_stackpop(s) { printf("|Stack Pop:%u\n", (s)->lenUsed); level -= 1; }
+
+      #define ast_op(i) {\
+          for(int zpp__macIdent(ast_op_i) = 0; zpp__macIdent(ast_op_i) < level; zpp__macIdent(ast_op_i)++) fputs("  ", stdout);\
+          printf("|Operator: %c\n", i);}
+
+      #define ast_float(i) {\
+            for(int zpp__macIdent(ast_op_i) = 0; zpp__macIdent(ast_op_i) < level; zpp__macIdent(ast_op_i)++) fputs("  ", stdout);\
+            printf("|Float: %lf\n", i);}
     #else
       #define ast_stackpush(s)
       #define ast_stackpop(s)
@@ -209,6 +228,22 @@ nc_Val eval_expr(nc_VarStackArr *stackArr, nc_VarsTable *v, char *expr, nc_Val l
             nc_Val retval = 0;
             sscanf(i, "%lf", &retval);
             return retval;
+        } else if(*i == '$') {
+            i += 1;
+            char *endi = i;
+            while(isalpha(*endi) || *endi == '_') endi += 1;
+            char tmp = *endi;
+            *endi = 0;
+
+            z__String *f = NULL;
+            z__HashHoyt_getreff(fns, i, f);
+
+            i = endi;
+            *i = tmp;
+            
+            if(f) {
+                return eval_expr(stackArr, v, fns, f->data, lastval);
+            }
         } else {
             if (*i != '\0') goto _L_force_stack_push;
         }
@@ -266,6 +301,23 @@ nc_Val eval_expr(nc_VarStackArr *stackArr, nc_VarsTable *v, char *expr, nc_Val l
             
             *i = tmp;
             if(*i) goto _L_recheck;
+        } else if(*i == '$') {
+            i += 1;
+            char *endi = i;
+            while(isalpha(*endi) || *endi == '_') endi += 1;
+            char tmp = *endi;
+            *endi = 0;
+
+            z__String *f = NULL;
+            z__HashHoyt_getreff(fns, i, f);
+
+            i = endi;
+            *i = tmp;
+            
+            if(f) {
+                //nc_VarStackArr_push
+                z__Arr_push(&stack_cursor->vars, eval_expr(stackArr, v, fns, f->data, lastval));
+            }            
         }
         next_tok(i, t);
 
@@ -295,15 +347,57 @@ void print_vars(nc_VarsTable *v)
     }
 }
 
+void nc_FnsTable_set(nc_FnsTable *fns, const char *name, const char *expr)
+{
+    z__String *str = NULL;
+    z__HashHoyt_getreff(fns, name, str);
+
+    if(str == NULL) {
+        z__HashHoyt_set(fns, name, z__String_newFrom("%s", expr));
+    } else {
+        z__String_replace(str, "%s", expr);
+    }
+}
+
+void nc_FnsTable_remove(nc_FnsTable *fns, const char * name)
+{
+    z__String *str = NULL;
+    z__HashHoyt_getreff(fns, name, str);
+
+    if(str != NULL) {
+        z__String_delete(str);
+    }
+}
+
+void nc_FnsTable_delete(nc_FnsTable *fns)
+{
+    for (size_t i = 0; i < fns->len; i++) {
+        if(fns->entries[i].key) {
+            z__String_delete(&fns->entries[i].value);
+        }
+    }
+    z__HashHoyt_delete(fns);
+}
+
+void nc_FnsTable_print(nc_FnsTable *fns)
+{
+    for (size_t i = 0; i < fns->len; i++) {
+        if(fns->entries[i].key) {
+            printf("%s >>> %s\n", fns->entries[i].key, fns->entries[i].value.data);
+        }
+    }
+}
+
 int main(void)
 {
     puts(NC_INTRODUCTION);
-    nc_VarsTable *v = z__New0(*v, 1);
-    z__HashHoyt_new(v);
-    z__String var = z__String_newFromStr("stdout", -1);
+    nc_State *state = z__New0(*state, 1);
 
-    nc_VarStackArr stackArr;
-    nc_VarStackArr_new(&stackArr, 8);
+    z__HashHoyt_new(&state->vars);
+    z__HashHoyt_new(&state->fns);
+    nc_VarStackArr_new(&state->stackArr, 8);
+
+    z__String var_name = z__String_newFromStr("stdout", sizeof "stdout" -1);
 
     nc_Val retval = 0;
 
@@ -321,30 +415,46 @@ int main(void)
                     if(*expr == '_' || isalpha(*expr)) {
                         char *end = expr + 1;
                         while (isalnum(*end) || *end == '_') end++;
-                        z__String_replaceStr(&var, expr, end - expr);
+                        z__String_replaceStr(&var_name, expr, end - expr);
                         expr = end;
                     } else {
                         error_print("/s: Not a valid variable name");
                     }
                 }
-                break; case 'l': print_vars(v); goto _L_skip;
+                break; case 'f': {
+                    expr = gettows(expr);
+                    expr = skipws(expr);
+                    if(expr == 0) goto _L_skip;
+                    if(*expr == '_' || isalpha(*expr)) {
+                        char *end = expr + 1;
+                        while (isalnum(*end) || *end == '_') end++; 
+                        z__String fnname = z__String_newFromStr(expr, end - expr);
+                        expr = end;
+                        nc_FnsTable_set(&state->fns, fnname.data, expr);
+                        z__String_delete(&fnname);
+                    } else {
+                        error_print("/f: Not a valid function name");
+                    }
+                }
+                break; case 'a': nc_FnsTable_print(&state->fns);
+                break; case 'l': print_vars(&state->vars); goto _L_skip;
             }
         }
 
-        retval = eval_expr(&stackArr, v, expr, retval);
-        z__HashHoyt_set(v, var.data, retval);
-        z__HashHoyt_set(v, "_last", retval);
+        retval = eval_expr(&state->stackArr, &state->vars, &state->fns, expr, retval);
+        z__HashHoyt_set(&state->vars, var_name.data, retval);
+        z__HashHoyt_set(&state->vars, "_last", retval);
 
         _L_skip:
-        nc_print(5, "%s:%lf ", var.data, retval);
+        nc_print(5, "%s:%lf ", var_name.data, retval);
         z__FREE(line);
-        z__String_replaceStr(&var, "stdout", sizeof("stdout"));
+        z__String_replaceStr(&var_name, "stdout", sizeof("stdout"));
     }
 
     _L_return: {
-        nc_VarStackArr_delete(&stackArr);
-        z__HashHoyt_delete(v);
-        z__FREE(v);
+        nc_VarStackArr_delete(&state->stackArr);
+        z__HashHoyt_delete(&state->vars);
+        z__FREE(state);
         return 0;
     }
 }
