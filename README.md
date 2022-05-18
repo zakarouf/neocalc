@@ -1,8 +1,6 @@
-# NeoCalc
-
 <div align="center">
   <img src="docs/neocalc.png" width="600"/>
-  <h1>z_</h1>
+  <h1>neocalc</h1>
 
   A small lisp-like calculator with variables.
 </div>
