@@ -24,22 +24,22 @@
 /* Extern */
 #include "nc.h"
 
-/**/
-#define NC_VERSION  "0.2.0"
-#define NC_YEAR     "2022-2023"
-#define NC_HOSTPAGE "https://github.com/zakarouf/neocalc"
-
-#define NC_INTRODUCTION\
-    "Welcome to neocalc (" NC_HOSTPAGE ")\n"\
-    "neocalc " NC_VERSION " by zakarouf " NC_YEAR " (/q to exit)"\
-
-
 /* Utility Functions */
 #define logprint(b, f, fmt, ...) z__fprint_cl256(stdout, b, f, fmt "\n" ,##__VA_ARGS__)
 #define logfprint(file, b, f, fmt, ...) z__fprint_cl256(file, b, f , fmt "\n" ,##__VA_ARGS__)
 
-#define error_print(fmt, ...) logprint(0, 1, fmt ,##__VA_ARGS__)
-#define nc_print(color, fmt, ...) z__fprint_cl256f(stdout, color, fmt "\n",##__VA_ARGS__)
+#define nc_print(fp, color, fmt, ...) z__fprint_cl256f(fp, color, fmt "\n",##__VA_ARGS__)
+#define nc_perr(fp, fmt, ...)\
+    z__fprint(fp\
+        , z__ansi_fmt((bold), (cl256_fg, 1))\
+          "Error:" z__ansi_fmt((plain)) " "\
+            fmt "\n", __VA_ARGS__);
+
+#define nc_pwarn(fp, fmt, ...)\
+    z__fprint(fp\
+        , z__ansi_fmt((bold), (cl256_fg, 5))\
+          "Warning:" z__ansi_fmt((plain)) " "\
+            fmt "\n", __VA_ARGS__);
 
 #if DEBUG == 1
     #define DP(b, f, fmt, ...) logprint(b, f, "DEBUG:: " fmt "\n" ,##__VA_ARGS__)
@@ -55,13 +55,12 @@
 #define iswhitespace(c)  ((c) == ' ' || (c) == '\n' || (c) == '\t')
 #define isidentbegin(c)  ((c) == '_' || isalpha(c))
 #define isident(c)       ((c) == '_' || isalnum(c))
+#define isfloat(c)       (isdigit(c) || (c) == '.' || (c) == '-')
 
 /* Assert Implementation */
 #define nc__PRIV__exception(fmt, ext_met, ...)\
-    ({z__fprint_cl256f(stdout, 1\
-        , z__ansi_fmt((bold)) "Error: " z__ansi_fmt((plain)) fmt "\n" ,##__VA_ARGS__ );\
-        ext_met;\
-     })
+    ({ nc_perr(stdout, fmt,##__VA_ARGS__) ; ext_met; })
+
 #define nc_assert(exp, fmt, ...) zpp__assert_construct(exp, nc__PRIV__exception, fmt, exit(-1), __VA_ARGS__)
 #define nc_eval_assert(exp, ext_met, fmt, ...) zpp__assert_construct(exp, nc__PRIV__exception, fmt, ext_met, __VA_ARGS__)
 
@@ -226,7 +225,7 @@ void nc_State_setvar(nc_State *s, const char *name, z__f64 val)
     z__HashHoyt_set(&s->vars, name, val);
 }
 
-z__f64 *nc_State_getvalreff(nc_State *s, const char *name)
+z__f64 *nc_State_getvar(nc_State *s, const char *name)
 {
     z__f64 *v = NULL;
     z__HashHoyt_getreff(&s->vars, name, v);
@@ -237,7 +236,11 @@ z__f64 nc_State_getval(nc_State *s, const char *name)
 {
     z__f64 *v = NULL;
     z__HashHoyt_getreff(&s->vars, name, v);
-    return v? *v: 0;
+    if(v == NULL) {
+        nc_pwarn(stdout, "'%s' var does not exist", name);
+        return 0;
+    }
+    return *v;
 }
 
 nc_Expr const * nc_State_getexpr(nc_State *s, const char *name)
@@ -245,7 +248,7 @@ nc_Expr const * nc_State_getexpr(nc_State *s, const char *name)
     nc_Expr *expr = NULL;
     z__HashHoyt_getreff(&s->exprs, name, expr);
     if(expr == NULL) {
-        nc_print(1, "# '%s' symbol not found", name);
+        nc_perr(stdout, "'%s' symbol not found", name);
     }
     return expr;
 }
@@ -304,7 +307,7 @@ z__f64 nc_Stacks_list_op_action_(nc_Stacks *s, z__Str op)
             if(isdigit(op.data[0]) || op.data[0] == '.') {
                 return atof(op.data);
             } else {
-                nc_print(1, "# NON A NUMBER -> \"%s\"", op.data);
+                nc_print(stdout, 1, "# NON A NUMBER -> \"%s\"", op.data);
                 return 0;
             }
         }
@@ -325,6 +328,9 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
         prevtok = tok; tok = w;\
     }
     #define toknext(w) tokset(tok + w)
+    #define get(idx) (expr->expr.data[idx])
+    #define exprend() (expr->expr.lenUsed <= tok)
+
     #define expr_state_save(){\
         z__Arr_getTop(s->estates).tok = tok;\
         z__Arr_getTop(s->estates).prevtok = prevtok;\
@@ -337,10 +343,8 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
         brac = z__Arr_getTop(s->estates).brac;\
         expr = z__Arr_getTop(s->estates).expr;\
     }
-    #define get(idx) (expr->expr.data[idx])
-    #define exprend() (expr->expr.lenUsed <= tok)
 
-    #if 1
+    #ifdef NC_AST
         #define ast_print(fmt, ...) nc_print(2, "ast >> " fmt "\n",##__VA_ARGS__)
         #define ast_retpush(type, sz) fwrite(type, sz, 1, stdout); ast_print("|ret push => %d" , s->stacks.retpoints.lenUsed);
         #define ast_retpop() ast_print("ret pop => %d, brac %llu", s->stacks.retpoints.lenUsed, brac)
@@ -353,8 +357,8 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
         #define ast_retpush(...) 
         #define ast_retpop(...)
         #define ast_est_pop() 
-        #define ast_est_push(d) 
-        #define ast_data_print(v) 
+        #define ast_est_push(...) 
+        #define ast_data_print(...) 
         #define ast_tgprint(...) 
  
     #endif
@@ -474,6 +478,104 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
 
     #undef tok
     #undef tokskip
+    #undef get
 }
 
+int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
+{
+    #define tok(w) {\
+        prevtok = tok; tok = z__String_tok(\
+                *nc_cmd, prevtok, z__Str(w, sizeof(w)));\
+    }
+    #define tokskip(w) {\
+        prevtok = tok; tok = z__String_tokskip(\
+                *nc_cmd, prevtok, z__Str(w, sizeof(w)));\
+    }
+    #define tokset(w) {\
+        prevtok = tok; tok = w;\
+    }
+    #define toknext(w) tokset(tok + w)
+    #define get(idx) (nc_cmd->data[idx])
+   
+    z__u64 tok = 0, prevtok = 0;
+
+    tokskip(" \t\n");
+
+    if(isparen_open(get(tok))) {
+        if(get(tok+1) == 's'
+        && get(tok+2) == 'e'
+        && get(tok+3) == 't'
+        && iswhitespace(get(tok+4))) {
+            toknext(5);
+            tokskip(" \n\t");
+
+            if(get(tok) == '@') {
+                toknext(1);
+                char *exprn = &get(tok);
+                while(!iswhitespace(get(tok))) toknext(1);
+                get(tok) = 0;
+                
+                toknext(1);
+                tokskip(" \n\t");
+
+                z__u64 in = atof(&get(tok));
+                if(get(tok) == '(') tok("(");
+                toknext(-1);
+
+                z__u64 start = tok;
+                z__u64 brac = 1;
+                while(brac) {
+                    if(get(tok) == '(') brac ++;
+                    else if(get(tok) == ')') brac --;
+                    else if(get(tok) == 0) return -1;
+                    toknext(1);
+                }
+
+                nc_State_setexpr(s, exprn, z__Str(&get(start), tok - start), in);
+            } else if (isident(get(tok))) {
+                char const *name = &get(tok);
+                while(isident(get(tok))) {
+                    toknext(1);
+                }
+                get(tok) = 0;
+                toknext(1);
+                tokskip(" \n\t");
+                
+                if(isfloat(get(tok))) {
+                    nc_State_setvar(s, name, atof(&get(tok)));
+                } else if(get(tok) == '(') {
+                    char *exprn = &get(tok);
+                    z__u64 brac = 1;
+                    while(brac) {
+                        if(get(tok) == '(') brac ++;
+                        else if(get(tok) == ')') brac --;
+                        else if(get(tok) == 0) return -1;
+                        toknext(1);
+                    }
+                    nc_State_setexpr(s, "__main__", z__Str(exprn, &get(tok) - exprn-1), 0);
+                    nc_State_setvar(s, name, nc_eval_expr(s, "__main__", 0, 0));
+                } else if(isidentbegin(get(tok))) {
+                    char const *vname = &get(tok);
+                    tok(")");
+                    get(tok-1) = 0;
+                    nc_State_setvar(s, name, nc_State_getval(s, vname));
+                } else {
+                    return -3;
+                }
+
+            } else {
+                return -2;
+            }
+        } else {
+            nc_State_setexpr(s, "__main__", z__Str(nc_cmd->data, nc_cmd->lenUsed), 0);
+            nc_State_setvar(s, res_name->data, nc_eval_expr(s, "__main__", 0, 0));
+        }
+    } else if(isfloat(get(tok))) {
+        nc_State_setvar(s, res_name->data, atof(&get(tok)));
+    } else if(isidentbegin(get(tok))) {
+        nc_State_setvar(s, res_name->data, nc_State_getval(s, &get(tok)));
+    }
+
+    return 0;
+}
 
