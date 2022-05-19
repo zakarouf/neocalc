@@ -1,5 +1,6 @@
 /* Essential */
 #include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 #include <z_/imp/ansi.h>
 #include <z_/imp/argparse.h>
@@ -23,11 +24,12 @@
 
 #define NC_INTRODUCTION\
     "Welcome to neocalc (" NC_HOSTPAGE ")\n"\
-    "neocalc " NC_VERSION " by zakarouf " NC_YEAR " (/q to exit)"\
+    "neocalc " NC_VERSION " by zakarouf " NC_YEAR " (`/q` to exit or `/h` for help)"\
 
 #define NC_HELP\
-    "Neocalc uses reverse polish notation for its expression\n"\
-    "Example: (+ 1 2 3)\n"\
+    "Neocalc is a small calculator that uses reverse polish notation for its expression\n"\
+    "Example:\n"\
+    "   (+ 1 2 3)\n"\
     "\n"\
     "(set <var> <value>) for setting a variable\n"\
     "(set @<expr-name> <pass> <expr>) for setting a expression\n"\
@@ -89,6 +91,8 @@ int main (z__i32 argc, char *argv[])
     nc_State *state = nc_State_new();
     if(argc < 2) {
         repl(state);
+    } else if(argv[1][0] == '-' && argv[1][1] == 'h') {
+        fputs(NC_HELP "\n", stdout);
     } else {
         z__String x = z__String_newFromStr("x", 1);
         nc_State_setvar(state, "x", 0);
