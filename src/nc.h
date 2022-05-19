@@ -3,6 +3,7 @@
 
 #include <z_/types/base.h>
 #include <z_/types/string.h>
+#include <stdio.h>
 
 typedef struct nc_State nc_State;
 
@@ -16,6 +17,11 @@ z__f64 *nc_State_getvar(nc_State *s, const char *name);
 
 z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _passed);
 int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name);
+
+#ifdef NC_USE_LOG
+#include <stdio.h>
+void nc_State_setlogfile(FILE *logfp);
+#endif
 
 #endif
 

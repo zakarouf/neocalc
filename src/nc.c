@@ -10,6 +10,7 @@
 #include <z_/types/string.h>
 #include <z_/types/arr.h>
 #include <z_/types/hashhoyt.h>
+#include <z_/types/contof.h>
 
 /* Printing */
 #include <z_/imp/tgprint.h>
@@ -25,21 +26,19 @@
 #include "nc.h"
 
 /* Utility Functions */
-#define logprint(b, f, fmt, ...) z__fprint_cl256(stdout, b, f, fmt "\n" ,##__VA_ARGS__)
-#define logfprint(file, b, f, fmt, ...) z__fprint_cl256(file, b, f , fmt "\n" ,##__VA_ARGS__)
+#define nc_print(fp, fmt, ...) (fp?z__fprint(fp, fmt "\n",##__VA_ARGS__):((void)0))
 
-#define nc_print(fp, color, fmt, ...) z__fprint_cl256f(fp, color, fmt "\n",##__VA_ARGS__)
 #define nc_perr(fp, fmt, ...)\
-    z__fprint(fp\
+    nc_print(fp\
         , z__ansi_fmt((bold), (cl256_fg, 1))\
           "Error:" z__ansi_fmt((plain)) " "\
-            fmt "\n", __VA_ARGS__);
+            fmt, __VA_ARGS__);
 
 #define nc_pwarn(fp, fmt, ...)\
-    z__fprint(fp\
+    nc_print(fp\
         , z__ansi_fmt((bold), (cl256_fg, 5))\
           "Warning:" z__ansi_fmt((plain)) " "\
-            fmt "\n", __VA_ARGS__);
+            fmt, __VA_ARGS__);
 
 #if DEBUG == 1
     #define DP(b, f, fmt, ...) logprint(b, f, "DEBUG:: " fmt "\n" ,##__VA_ARGS__)
@@ -58,11 +57,11 @@
 #define isfloat(c)       (isdigit(c) || (c) == '.' || (c) == '-')
 
 /* Assert Implementation */
-#define nc__PRIV__exception(fmt, ext_met, ...)\
-    ({ nc_perr(stdout, fmt,##__VA_ARGS__) ; ext_met; })
+#define nc__PRIV__exception(fp, fmt, ext_met, ...)\
+    ({ nc_perr(fp, fmt,##__VA_ARGS__) ; ext_met; })
 
-#define nc_assert(exp, fmt, ...) zpp__assert_construct(exp, nc__PRIV__exception, fmt, exit(-1), __VA_ARGS__)
-#define nc_eval_assert(exp, ext_met, fmt, ...) zpp__assert_construct(exp, nc__PRIV__exception, fmt, ext_met, __VA_ARGS__)
+#define nc_assert(exp, fp, fmt, ...) zpp__assert_construct(exp, nc__PRIV__exception, fp, fmt, exit(-1), __VA_ARGS__)
+#define nc_eval_assert(exp, ext_met, fp, fmt, ...) zpp__assert_construct(exp, nc__PRIV__exception, fp, fmt, ext_met, __VA_ARGS__)
 
 /**
  * Expression Type
@@ -119,8 +118,7 @@ typedef struct nc_State {
     nc_VarTable vars;
     nc_ExprTable exprs;
     nc_ExprStates estates;
-
-    z__f64 *_var_cursor;
+    FILE *logfp;
 } nc_State;
 
 /**
@@ -128,12 +126,13 @@ typedef struct nc_State {
  */
 void nc_data_print(nc_State *s)
 {
+    if(s->logfp == NULL) return;
     z__f64Arr v = s->stacks.v;
-    fputs("[ " z__ansi_fmt((cl256_fg, 4)) , stdout);
+    fputs("[ " z__ansi_fmt((cl256_fg, 4)) , s->logfp);
     z__Arr_foreach(i, v){
-        fprintf(stdout, "%f ", *i);
+        fprintf(s->logfp, "%f ", *i);
     }
-    fputs( z__ansi_fmt((plain)) "]\n", stdout);
+    fputs( z__ansi_fmt((plain)) "]\n", s->logfp);
 }
 
 static
@@ -178,6 +177,7 @@ void nc_Stacks_pop_retpoint(nc_Stacks *st, z__f64 res)
     st->v.lenUsed = z__Arr_getTop(st->retpoints).ret;
     z__Arr_pop_nocheck(&st->retpoints);
     nc_assert(st->retpoints.lenUsed < st->retpoints.len
+            , z__contof(st, nc_State, stacks)->logfp
             , "Irregular Popping of retpoints %d/%d", st->retpoints.lenUsed, st->retpoints.len);
     z__Arr_push(&st->v, res);
 }
@@ -194,17 +194,23 @@ void nc_Stacks_push_val(nc_Stacks *st, z__f64 val)
     z__Arr_push(&st->v, val);
 }
 
-nc_State* nc_State_new(void)
+nc_State* nc_State_new()
 {
     nc_State *s = z__MALLOC(sizeof(*s));
     nc_Stacks_new(&s->stacks);
     z__HashHoyt_new(&s->vars);
     z__HashHoyt_new(&s->exprs);
     z__Arr_new(&s->estates, 32);
+    s->logfp = stdout;
 
     nc_State_setvar(s, "__last", 0);
     nc_State_setexpr(s, "__last", z__Str("0", 1), 0);
     return s;
+}
+
+void nc_State_setlogfile(nc_State *s, FILE *logfp)
+{
+    s->logfp = logfp;
 }
 
 void nc_State_delete(nc_State *s)
@@ -217,6 +223,7 @@ void nc_State_delete(nc_State *s)
     }
     z__HashHoyt_delete(&s->exprs);
     z__Arr_delete(&s->estates);
+    
     z__FREE(s);
 }
 
@@ -237,7 +244,7 @@ z__f64 nc_State_getval(nc_State *s, const char *name)
     z__f64 *v = NULL;
     z__HashHoyt_getreff(&s->vars, name, v);
     if(v == NULL) {
-        nc_pwarn(stdout, "'%s' var does not exist", name);
+        nc_pwarn(s->logfp, "'%s' var does not exist", name);
         return 0;
     }
     return *v;
@@ -248,7 +255,7 @@ nc_Expr const * nc_State_getexpr(nc_State *s, const char *name)
     nc_Expr *expr = NULL;
     z__HashHoyt_getreff(&s->exprs, name, expr);
     if(expr == NULL) {
-        nc_perr(stdout, "'%s' symbol not found", name);
+        nc_perr(s->logfp, "'%s' symbol not found", name);
     }
     return expr;
 }
@@ -307,7 +314,9 @@ z__f64 nc_Stacks_list_op_action_(nc_Stacks *s, z__Str op)
             if(isdigit(op.data[0]) || op.data[0] == '.') {
                 return atof(op.data);
             } else {
-                nc_print(stdout, 1, "# NON A NUMBER -> \"%s\"", op.data);
+                nc_pwarn(
+                    z__contof(s, nc_State, stacks)->logfp
+                    , "Unknown Token -> \"%s\"", op.data);
                 return 0;
             }
         }
@@ -344,14 +353,16 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
         expr = z__Arr_getTop(s->estates).expr;\
     }
 
-    #ifdef NC_AST
-        #define ast_print(fmt, ...) nc_print(2, "ast >> " fmt "\n",##__VA_ARGS__)
-        #define ast_retpush(type, sz) fwrite(type, sz, 1, stdout); ast_print("|ret push => %d" , s->stacks.retpoints.lenUsed);
+    #if NC_AST
+        #define ast_print(fmt, ...) nc_print(s->logfp, "ast >> " fmt "\n",##__VA_ARGS__)
+        #define ast_retpush(type, sz)\
+                ast_print("|ret push => %d" , s->stacks.retpoints.lenUsed);
+
         #define ast_retpop() ast_print("ret pop => %d, brac %llu", s->stacks.retpoints.lenUsed, brac)
         #define ast_est_pop() ast_print("")
         #define ast_est_push(d, v) ast_print("# EST PUSH: %s, %llu", d, v);
         #define ast_data_print(v) nc_data_print(v)
-        #define ast_tgprint(...) z__tprint(__VA_ARGS__)
+        #define ast_tgprint(...) z__tfprint(s->logfp, __VA_ARGS__)
     #else
         #define ast_print(...) 
         #define ast_retpush(...) 
@@ -390,6 +401,7 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
             tok(" \n\t");
             nc_Stacks_push_retpoint(&s->stacks, z__Str(p, tok - prevtok - 1));
             ast_retpush(p, tok - prevtok -1);
+
         } else if(get(tok) == ')') {
             toknext(1);
             brac --;
@@ -403,7 +415,10 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
                 z__u64 retdiff = nc_Stacks_retdiff(&s->stacks);
                 const nc_Expr *expr_new = nc_State_getexpr(s, op.data+1);
 
-                nc_eval_assert(expr_new, goto _L_at_skip;, "Expression does not exist %s", op.data);
+                nc_eval_assert(expr_new
+                    , goto _L_at_skip;
+                    , s->logfp
+                    , "Expression does not exist %s", op.data);
 
                 nc_State_push_estate(s
                         , 0, 0, 0
@@ -413,6 +428,7 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
                 
                 nc_eval_assert(retdiff >= expr_new->in,
                         nc_State_pop_estate(s); goto _L_at_skip;,
+                        s->logfp,
                         "Passed In val is less than required in %s:\n"
                         "Passed: %llu\n"
                         "Required: %llu\n"
@@ -518,8 +534,9 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
                 toknext(1);
                 tokskip(" \n\t");
 
+
                 z__u64 in = atof(&get(tok));
-                if(get(tok) == '(') tok("(");
+                if(get(tok) != '(') tok("(");
                 toknext(-1);
 
                 z__u64 start = tok;
@@ -527,7 +544,12 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
                 while(brac) {
                     if(get(tok) == '(') brac ++;
                     else if(get(tok) == ')') brac --;
-                    else if(get(tok) == 0) return -1;
+                    else if(get(tok) == 0) {
+                        nc_perr(s->logfp,
+                            "Setting an expression '%s',\n"
+                            "in `%s`", exprn, &get(start));
+                        return -1;
+                    }
                     toknext(1);
                 }
 
@@ -549,7 +571,12 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
                     while(brac) {
                         if(get(tok) == '(') brac ++;
                         else if(get(tok) == ')') brac --;
-                        else if(get(tok) == 0) return -1;
+                        else if(get(tok) == 0) {
+                            nc_perr(s->logfp,
+                                "For evaluating '%s',\n  trailing brackets in expression %s"
+                                , name, exprn);
+                            return -2;
+                        } 
                         toknext(1);
                     }
                     nc_State_setexpr(s, "__main__", z__Str(exprn, &get(tok) - exprn-1), 0);
@@ -566,6 +593,25 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
             } else {
                 return -2;
             }
+
+        } else if(get(tok + 1) == 'c'
+               && get(tok + 2) == 'h'
+               && iswhitespace(get(tok + 3))) {
+            toknext(4);
+            tokskip(" \n\t");
+
+            char *name = &get(tok);
+            tok("\n\t )");
+            toknext(-1);
+            get(tok) = 0;
+
+            if(!isidentbegin(*name)) {
+                nc_perr(s->logfp, "'%s' is not a valid var name", name);
+                return -4;
+            }
+
+            z__String_replaceStr(res_name, name, &get(tok) - name);
+
         } else {
             nc_State_setexpr(s, "__main__", z__Str(nc_cmd->data, nc_cmd->lenUsed), 0);
             nc_State_setvar(s, res_name->data, nc_eval_expr(s, "__main__", 0, 0));
