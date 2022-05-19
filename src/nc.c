@@ -450,8 +450,7 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
                 if(!brac) {
                     ast_tgprint("Expr POP:", s->estates.data[s->estates.lenUsed-1].expr->expr);
                     nc_State_pop_estate(s);
-                    z__u32 retdiff = nc_Stacks_retdiff(&s->stacks);
-                    res = s->stacks.v.data[s->stacks.v.lenUsed - retdiff + 1];
+                    res = z__Arr_getTop(s->stacks.v);
                     nc_Stacks_pop_retpoint(&s->stacks, res);
                     ast_data_print(s);
                     goto _L_restart;
@@ -471,17 +470,16 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
             get(tok) = ch;
         } else if(get(tok) == '#') {
             toknext(1);
-            while(isident(get(tok))) toknext(1);
-            z__char ch = get(tok);
-            get(tok) = 0;
-            ast_tgprint("-> passed :", _passed);
-            nc_Stacks_push_val(&s->stacks, s->stacks.v.data[
-                z__Arr_getVal(
+            z__u32 retidx = s->stacks.retpoints.lenUsed - brac - 1;
+            _passed = z__Arr_getVal(
                       s->stacks.retpoints
-                    , s->stacks.retpoints.lenUsed - brac + atoi(&get(tok)) - 1).ret
-            ]);
+                    , retidx).ret + atoi(&get(tok));
+           
+            while(isdigit(get(tok))) toknext(1);
+
+            ast_tgprint("-> passed :", _passed, "bracs", brac, "retidx", retidx);
+            nc_Stacks_push_val(&s->stacks, s->stacks.v.data[_passed]);
             ast_data_print(s);
-            get(tok) = ch;
         } else if(iswhitespace(get(tok))) {
             tok(" \t\n");
         } else {
