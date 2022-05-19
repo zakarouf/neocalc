@@ -474,10 +474,12 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
             while(isident(get(tok))) toknext(1);
             z__char ch = get(tok);
             get(tok) = 0;
-            z__u32 idx = atoi(&get(tok));
-            _passed =  s->stacks.v.lenUsed - z__Arr_getTop(s->estates).passed + idx;
-            ast_tgprint(_passed);
-            nc_Stacks_push_val(&s->stacks, s->stacks.v.data[_passed]);
+            ast_tgprint("-> passed :", _passed);
+            nc_Stacks_push_val(&s->stacks, s->stacks.v.data[
+                z__Arr_getVal(
+                      s->stacks.retpoints
+                    , s->stacks.retpoints.lenUsed - brac + atoi(&get(tok)) - 1).ret
+            ]);
             ast_data_print(s);
             get(tok) = ch;
         } else if(iswhitespace(get(tok))) {
@@ -553,7 +555,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
                     toknext(1);
                 }
 
-                nc_State_setexpr(s, exprn, z__Str(&get(start), tok - start), in);
+                nc_State_setexpr(s, exprn, z__Str(&get(start), tok - start - 1), in);
             } else if (isident(get(tok))) {
                 char const *name = &get(tok);
                 while(isident(get(tok))) {
