@@ -136,12 +136,29 @@ void nc_data_print(nc_State *s)
 }
 
 static
-nc_Expr nc_Expr_new(const z__Str expr_raw, z__u64 in)
+void nc_Expr_set_in(nc_Expr *expr)
 {
-    return (nc_Expr){
-        .in = in,
+    z__u32 tok = 0; z__u32 prevtok = 0;
+
+    while(expr->expr.data[tok] != 0) {
+        tok = z__String_tok(expr->expr, prevtok, z__Str("#", 1));
+        z__i32 _in = atoi(expr->expr.data + tok) + 1;
+        if(_in > expr->in) {
+            expr->in = _in;
+        }
+        prevtok = tok;
+    }
+}
+
+static
+nc_Expr nc_Expr_new(const z__Str expr_raw)
+{
+    nc_Expr expr = {
         .expr = z__String_newFromStr(expr_raw.data, expr_raw.len)
     };
+    nc_Expr_set_in(&expr);
+
+    return expr;
 }
 
 static
@@ -204,7 +221,7 @@ nc_State* nc_State_new()
     s->logfp = stdout;
 
     nc_State_setvar(s, "__last", 0);
-    nc_State_setexpr(s, "__last", z__Str("0", 1), 0);
+    nc_State_setexpr(s, "__last", z__Str("0", 1));
     return s;
 }
 
@@ -260,16 +277,18 @@ nc_Expr const * nc_State_getexpr(nc_State *s, const char *name)
     return expr;
 }
 
-void nc_State_setexpr(nc_State *s, const char *name, const z__Str expr_raw, z__u64 in)
+void nc_State_setexpr(nc_State *s, const char *name, const z__Str expr_raw)
 {
     nc_Expr *expr;
     z__HashHoyt_getreff(&s->exprs, name, expr);
+
     if(expr) {
         z__String_replaceStr(&expr->expr, expr_raw.data, expr_raw.len);
-        expr->in = in;
-        return;
+        nc_Expr_set_in(expr);
+    } else {
+        nc_Expr expr_new = nc_Expr_new(expr_raw);
+        z__HashHoyt_set(&s->exprs, name, expr_new);
     }
-    z__HashHoyt_set(&s->exprs, name, nc_Expr_new(expr_raw, in));
 }
 
 static
@@ -316,7 +335,7 @@ z__f64 nc_Stacks_list_op_action_(nc_Stacks *s, z__Str op)
             } else {
                 nc_pwarn(
                     z__contof(s, nc_State, stacks)->logfp
-                    , "Unknown Token -> \"%s\"", op.data);
+                    , "Built-in, Unknown Token -> \"%s\"", op.data);
                 return 0;
             }
         }
@@ -432,7 +451,8 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
                         "Passed In val is less than required in %s:\n"
                         "Passed: %llu\n"
                         "Required: %llu\n"
-                        "Called From:\n%s", op.data, retdiff, expr_new->in, expr->expr.data);
+                        "Called From:\n"
+                        "   %s", op.data, retdiff, expr_new->in, expr->expr.data+1);
 
                 ast_est_push(op.data, nc_Stacks_retdiff(&s->stacks));
 
@@ -532,12 +552,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
                 get(tok) = 0;
                 
                 toknext(1);
-                tokskip(" \n\t");
-
-
-                z__u64 in = atof(&get(tok));
                 if(get(tok) != '(') tok("(");
-                toknext(-1);
 
                 z__u64 start = tok;
                 z__u64 brac = 1;
@@ -553,7 +568,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
                     toknext(1);
                 }
 
-                nc_State_setexpr(s, exprn, z__Str(&get(start), tok - start - 1), in);
+                nc_State_setexpr(s, exprn, z__Str(&get(start), tok - start - 1));
             } else if (isident(get(tok))) {
                 char const *name = &get(tok);
                 while(isident(get(tok))) {
@@ -579,7 +594,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
                         } 
                         toknext(1);
                     }
-                    nc_State_setexpr(s, "__main__", z__Str(exprn, &get(tok) - exprn-1), 0);
+                    nc_State_setexpr(s, "__main__", z__Str(exprn, &get(tok) - exprn-1));
                     nc_State_setvar(s, name, nc_eval_expr(s, "__main__", 0, 0));
                 } else if(isidentbegin(get(tok))) {
                     char const *vname = &get(tok);
@@ -613,7 +628,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
             z__String_replaceStr(res_name, name, &get(tok) - name);
 
         } else {
-            nc_State_setexpr(s, "__main__", z__Str(nc_cmd->data, nc_cmd->lenUsed), 0);
+            nc_State_setexpr(s, "__main__", z__Str(nc_cmd->data, nc_cmd->lenUsed));
             nc_State_setvar(s, res_name->data, nc_eval_expr(s, "__main__", 0, 0));
         }
     } else if(isfloat(get(tok))) {
