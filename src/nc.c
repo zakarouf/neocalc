@@ -142,7 +142,7 @@ void nc_Expr_set_in(nc_Expr *expr)
 
     while(expr->expr.data[tok] != 0) {
         tok = z__String_tok(expr->expr, prevtok, z__Str("#", 1));
-        z__i32 _in = atoi(expr->expr.data + tok) + 1;
+        z__u64 _in = atoll(expr->expr.data + tok) + 1;
         if(_in > expr->in) {
             expr->in = _in;
         }
@@ -510,10 +510,51 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
    
     s->stacks.v.lenUsed = 0;
     s->stacks.retpoints.lenUsed = 0;
-    return z__Arr_getVal(s->stacks.v, 0);
+    return res;
 
     #undef tok
     #undef tokskip
+    #undef get
+}
+
+void nc_runfile(nc_State *s, const char *name)
+{
+    z__String file = z__String_newFromFile(name);
+    if(!file.data) {
+        nc_perr(s->logfp, "Cannot Load File %s", name);
+        return;
+    }
+    z__Arr(z__Vector(char, *start, *end)) cmds;
+    z__Arr_new(&cmds, 32);
+    z__u32 idx = 0;
+    z__i32 brac = 0;
+    #define get() file.data[idx]
+    while(get() != 0 || brac < 0) {
+        if(get() == '(') {
+            if(!brac) {
+                z__Arr_pushInc(&cmds);
+                z__Arr_getTop(cmds).start = &get();
+            }
+            brac ++;
+        } else if (get() == ')') {
+            brac --;
+            if(!brac) {
+                z__Arr_getTop(cmds).end = &get();
+            }
+        }
+        idx ++;
+    }
+
+    z__String res = z__String_newFrom("_");
+    z__Arr_foreach(i, cmds) {
+        z__String cmd = z__String_bind(i->start, i->end - i->start+1);
+        fwrite(cmd.data, 1, cmd.lenUsed,  stdout);
+        fputs(" :\n", stdout);
+        nc_eval(s, &cmd, &res);
+    }
+    z__String_delete(&res);
+    z__Arr_delete(&cmds);
+
     #undef get
 }
 
@@ -627,6 +668,20 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name)
 
             z__String_replaceStr(res_name, name, &get(tok) - name);
 
+        } else if(get(tok + 1) == 'l'
+               && get(tok + 2) == 'o'
+               && get(tok + 3) == 'a'
+               && get(tok + 4) == 'd'
+               && iswhitespace(get(tok + 5))) {
+            toknext(6);
+            tokskip(" \n\t");
+
+            char *name = &get(tok);
+            tok(" \n\t)");
+            toknext(-1);
+            get(tok) = 0;
+
+            nc_runfile(s, name);
         } else {
             nc_State_setexpr(s, "__main__", z__Str(nc_cmd->data, nc_cmd->lenUsed));
             nc_State_setvar(s, res_name->data, nc_eval_expr(s, "__main__", 0, 0));

@@ -43,6 +43,7 @@
 
 #define NC_REPL_PROMT "> "
 
+
 static
 void repl(nc_State *s)
 {
@@ -61,6 +62,10 @@ void repl(nc_State *s)
                     break; case 'v': {
                         char const *name = z__str_skipget_nonws(line.data + 2, line.lenUsed-2);
                         z__String_replaceStr(&res_var, name, (line.data + line.lenUsed) - name);
+                    }
+                    break; case 'l': {
+                        char const *name = z__str_skipget_nonws(line.data + 2, line.lenUsed-2);
+                        nc_runfile(s, name);
                     }
                     break; case 'h': {
                         z__fprint(stdout, "%s", NC_HELP);
