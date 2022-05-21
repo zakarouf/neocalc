@@ -98,7 +98,10 @@ typedef z__HashHoyt(nc_Expr) nc_ExprTable;
  * Return Points
  */
 typedef struct {
+    /* Store the method name */
     z__Str app;
+
+    /* Return point */
     z__size ret;
 } nc_RetPoint;
 
@@ -114,10 +117,33 @@ typedef struct {
  * Entire state of neocalc
  */
 typedef struct nc_State {
+    /**
+     * All the stack data and retpoints and apply methods
+     */
     nc_Stacks stacks;
+
+    /**
+     * Hash set forming all the defined variables
+     */
     nc_VarTable vars;
+
+    /**
+     * Hash set containing all defined expression
+     */
     nc_ExprTable exprs;
+
+    /**
+     * Array Storing the expression state,
+     * in order to load and save states between calling a expression
+     */
     nc_ExprStates estates;
+
+    /**
+     * Log File
+     * All the log output is send to this file stream
+     * If set to `NULL`, no logging is done
+     * Default is set to `stdout`
+     */
     FILE *logfp;
 } nc_State;
 
@@ -135,6 +161,9 @@ void nc_data_print(nc_State *s)
     fputs( z__ansi_fmt((plain)) "]\n", s->logfp);
 }
 
+/**
+ * Evaluate the minimum requried the number of arguments to be passed when calling the said expression
+ */
 static
 void nc_Expr_set_in(nc_Expr *expr)
 {
@@ -150,6 +179,9 @@ void nc_Expr_set_in(nc_Expr *expr)
     }
 }
 
+/**
+ * Create a new expression
+ */
 static
 nc_Expr nc_Expr_new(const z__Str expr_raw)
 {
@@ -346,6 +378,9 @@ z__f64 nc_Stacks_list_op_action_(nc_Stacks *s, z__Str op)
 
 z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _passed)
 {
+    /**
+     * Basic parsing macros wrapper to make stuff easier
+     */
     #define tok(w) {\
         prevtok = tok; tok = z__String_tok(expr->expr, prevtok, z__Str(w, sizeof(w)));\
     }
@@ -359,6 +394,9 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
     #define get(idx) (expr->expr.data[idx])
     #define exprend() (expr->expr.lenUsed <= tok)
 
+    /**
+     * State loading and saving
+     */
     #define expr_state_save(){\
         z__Arr_getTop(s->estates).tok = tok;\
         z__Arr_getTop(s->estates).prevtok = prevtok;\
@@ -372,6 +410,9 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
         expr = z__Arr_getTop(s->estates).expr;\
     }
 
+    /**
+     * For debug purpose
+     */
     #if NC_AST
         #define ast_print(fmt, ...) nc_print(s->logfp, "ast >> " fmt "\n",##__VA_ARGS__)
         #define ast_retpush(type, sz)\
@@ -392,6 +433,13 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
         #define ast_tgprint(...) 
  
     #endif
+
+    /**
+     * Expressions are evaluated on a single layer without
+     * recursive calls or state based function calls.
+     * The state is saved and loaded on the run,
+     * therefore making nc_eval_expr() independent
+     */
 
     nc_State_push_estate(s, 0, 0, 0, _passed, nc_State_getexpr(s, expr_name));
     for (size_t i = 0; i < _passed; i++) {
@@ -422,11 +470,18 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
             ast_retpush(p, tok - prevtok -1);
 
         } else if(get(tok) == ')') {
+            /**
+             * An expression is evaluated only when closing paren is found
+             */
+
             toknext(1);
             brac --;
-            //_L_force_stack_pop:; // unused
-
+            
+            /* Evaluate which type of method to use on the data */
+            /* Store the method name */
             z__Str op = z__Arr_getTop(s->stacks.retpoints).app;
+
+            /* Call an defined expression */
             if(op.data[0] == '@') {
                 expr_state_save();
                 z__char ch = op.data[op.len];
@@ -460,12 +515,19 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
                 op.data[op.len] = ch;
                 goto _L_restart;
 
+            /* Call a built-in function */
             } else {
                 res = nc_Stacks_list_op_action_(&s->stacks, op);
             }
+
+            /* Pop all the data in the current expression stack and push the result */
             nc_Stacks_pop_retpoint(&s->stacks, res);
             ast_data_print(s);
             ast_retpop();
+
+            /* If exiting a defined expression then pop current state; and
+             * load the previous state,
+             * while pushing the result of the current state at top of the previous state */
             if(s->stacks.retpoints.lenUsed) {
                 if(!brac) {
                     ast_tgprint("Expr POP:", s->estates.data[s->estates.lenUsed-1].expr->expr);
@@ -475,11 +537,15 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
                     ast_data_print(s);
                     goto _L_restart;
                 }
-            } 
+            }
+        
+        /* Push a literal value to the data stack */
         } else if(isdigit(get(tok)) || get(tok) == '.' || get(tok) == '-') {
             nc_Stacks_push_val(&s->stacks, atof(&get(tok)));
             ast_data_print(s);
             while(get(tok) == '.' || isdigit(get(tok))) toknext(1);
+
+        /* Push a value of a variable to the data stack */
         } else if(isidentbegin(get(tok))) {
             z__u64 tmp = tok;
             while(isident(get(tok))) toknext(1);
@@ -488,6 +554,8 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
             nc_Stacks_push_val(&s->stacks, nc_State_getval(s, &get(tmp)));
             ast_data_print(s);
             get(tok) = ch;
+
+        /* Push a value of a argument passed to the data stack */
         } else if(get(tok) == '#') {
             toknext(1);
             z__u32 retidx = s->stacks.retpoints.lenUsed - brac - 1;
@@ -500,16 +568,23 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
             ast_tgprint("-> passed :", _passed, "bracs", brac, "retidx", retidx);
             nc_Stacks_push_val(&s->stacks, s->stacks.v.data[_passed]);
             ast_data_print(s);
+
+        /* Skip whitespace */
         } else if(iswhitespace(get(tok))) {
             tok(" \t\n");
+
+        /* Should not happen in a proper expression */
         } else {
+            nc_pwarn(s->logfp, "Unknown Token at -> `%5s`", &get(tok));
             toknext(1);
         }
-
     }
    
+    /* Rewind Stack to be 0 */
     s->stacks.v.lenUsed = 0;
     s->stacks.retpoints.lenUsed = 0;
+
+    /* Return whatever the result is */
     return res;
 
     #undef tok
@@ -555,11 +630,15 @@ z__f64 nc_runfile(nc_State *s, const char *name)
     z__Arr_delete(&cmds);
 
     return res;
+
     #undef get
 }
 
 int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
 {
+    /**
+     * Parsing utility
+     */
     #define tok(w) {\
         prevtok = tok; tok = z__String_tok(\
                 *nc_cmd, prevtok, z__Str(w, sizeof(w)));\
@@ -578,6 +657,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
 
     tokskip(" \t\n");
 
+    /* Define a variable or an expression */
     if(isparen_open(get(tok))) {
         if(get(tok+1) == 's'
         && get(tok+2) == 'e'
@@ -586,6 +666,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
             toknext(5);
             tokskip(" \n\t");
 
+            /* Define a expression */
             if(get(tok) == '@') {
                 toknext(1);
                 char *exprn = &get(tok);
@@ -610,7 +691,9 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
                 }
 
                 nc_State_setexpr(s, exprn, z__Str(&get(start), tok - start - 1));
-            } else if (isident(get(tok))) {
+
+            /* Define a variable */
+            } else if (isidentbegin(get(tok))) {
                 char const *name = &get(tok);
                 while(isident(get(tok))) {
                     toknext(1);
@@ -646,10 +729,16 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
                     return -3;
                 }
 
+            /* set but what? no */
             } else {
+                nc_perr(s->logfp, 
+                    "Invalid name\n"
+                    "  (set %s\n"
+                    "       ^~~~~~~~", &get(tok));
                 return -2;
             }
         
+        /* Load a file */
         } else if(get(tok + 1) == 'l'
                && get(tok + 2) == 'o'
                && get(tok + 3) == 'a'
@@ -664,15 +753,22 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
             get(tok) = 0;
 
             nc_runfile(s, name);
+
+        /* Whatever is passed starts with a '(' so as a last resort, evaluate it as an expression */
         } else {
             nc_State_setexpr(s, "__main__", z__Str(nc_cmd->data, nc_cmd->lenUsed));
             *res = nc_eval_expr(s, "__main__", 0, 0);
         }
+
+    /* We got a number */
     } else if(isfloat(get(tok))) {
         *res = atof(&get(tok));
+
+    /* We got a variable */
     } else if(isidentbegin(get(tok))) {
         *res = nc_State_getval(s, &get(tok));
     }
 
     return 0;
 }
+

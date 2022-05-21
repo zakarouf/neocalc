@@ -24,7 +24,7 @@
 
 #define NC_INTRODUCTION\
     "Welcome to neocalc (" NC_HOSTPAGE ")\n"\
-    "neocalc " NC_VERSION " by zakarouf " NC_YEAR " (`/q` to exit or `/h` for help)"\
+    "neocalc " NC_VERSION " by zakarouf, (`/q` to exit or `/h` for help)"\
 
 #define NC_HELP\
     "Neocalc is a small calculator that uses reverse polish notation for its expression\n"\
@@ -32,11 +32,13 @@
     "   (+ 1 2 3)\n"\
     "\n"\
     "(set <var> <value>) for setting a variable\n"\
-    "(set @<expr-name> <pass> <expr>) for setting a expression\n"\
-    "(@expr 1 2) for calling an expression\n"\
+    "(set @<expr-name> <expr>) for setting a expression\n"\
+    "(@<expr-name> <arg-0> <arg-1> ... <arg-n>) for calling an expression\n"\
     "Example:\n"\
     "   (set x 10)\n"\
-    "   (set @sqr 1 (* #1 #1))\n"\
+    "   (set @sqr (* #0 #0))\n"\
+    "       NOTE: `#[0-9]+` is used to getting argument passed by there index\n"\
+    "       NOTE: Expression can be nested, so (set @f (/ (@sqr #0) 2)) is a valid\n"\
     "\n"\
     "   (@sqr 3)        => 9\n"\
     "   (@sqr (- x 8))  => 4\n"\
@@ -48,7 +50,7 @@ static
 void repl(nc_State *s)
 {
     puts(NC_INTRODUCTION);
-    z__String res_var = z__String_newFromStr("x", 1);
+    z__String res_var = z__String_newFromStr("_", 1);
     nc_State_setvar(s, res_var.data, 0);
     while(true) {
         char *_e = readline(NC_REPL_PROMT);
@@ -73,12 +75,17 @@ void repl(nc_State *s)
                     default: break;
                 }
             } else {
-                nc_eval(s, &line, &res_var);
-                z__fprint(stdout,
-                    z__ansi_fmt((cl256_fg, 6)) "%s" z__ansi_fmt((plain))
-                    " is "
-                    z__ansi_fmt((cl256_fg, 2)) "%f" z__ansi_fmt((plain)) "\n"
-                        , res_var.data, nc_State_getval(s, res_var.data));
+                z__f64 *res = nc_State_getvar(s, res_var.data);
+                if(res) {
+                    nc_eval(s, &line, res);
+                    z__fprint(stdout,
+                        z__ansi_fmt((cl256_fg, 6)) "%s" z__ansi_fmt((plain))
+                        " is "
+                        z__ansi_fmt((cl256_fg, 2)) "%f" z__ansi_fmt((plain)) "\n"
+                            , res_var.data, *res);
+                } else {
+                    z__fprint(stdout, z__ansi_fmt((bold)) "Var `%s` is not set" z__ansi_fmt((plain)) "\n", res_var.data);
+                }
             }
             free(_e);
         } else {
@@ -94,20 +101,27 @@ void repl(nc_State *s)
 int main (z__i32 argc, char *argv[])
 {   
     nc_State *state = nc_State_new();
+
+    /* Initialize repl if no arguments are given */
     if(argc < 2) {
         repl(state);
+
+    /* Check for help */
     } else if(argv[1][0] == '-' && argv[1][1] == 'h') {
         fputs(NC_HELP "\n", stdout);
+
+    /* Do evaluation and exit */
     } else {
-        z__String x = z__String_newFromStr("x", 1);
-        nc_State_setvar(state, "x", 0);
+        z__f64 res = 0;
+        z__String cmd = z__String_new(256);
         for (z__i32 i = 1; i < argc; i++) {
-            z__String cmd = z__String_bind((char *) argv[i], strlen(argv[i]));
-            nc_eval(state, &cmd, &x);
+            z__String_replaceStr(&cmd, argv[i], strlen(argv[i]));
+            nc_eval(state, &cmd, &res);
         }
-        z__fprint(stdout, "%f\n", nc_State_getval(state, x.data));
-        z__String_delete(&x);
+        z__String_delete(&cmd);
+        z__fprint(stdout, "%f\n", res);
     }
+
     nc_State_delete(state);
     return 0;
 }
