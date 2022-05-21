@@ -16,8 +16,8 @@ z__f64 nc_State_getval(nc_State *s, const char *name);
 z__f64 *nc_State_getvar(nc_State *s, const char *name);
 
 z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _passed);
-int nc_eval(nc_State *s, z__String *nc_cmd, z__String *res_name);
-void nc_runfile(nc_State *s, const char *name);
+int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res);
+z__f64 nc_runfile(nc_State *s, const char *name);
 
 #ifdef NC_USE_LOG
 #include <stdio.h>
