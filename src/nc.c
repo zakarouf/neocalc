@@ -623,8 +623,6 @@ z__f64 nc_runfile(nc_State *s, const char *name)
     z__f64 res = 0;
     z__Arr_foreach(i, cmds) {
         z__String cmd = z__String_bind(i->start, i->end - i->start+1);
-        fwrite(cmd.data, 1, cmd.lenUsed,  stdout);
-        fputs(" :\n", stdout);
         nc_eval(s, &cmd, &res);
     }
     z__Arr_delete(&cmds);

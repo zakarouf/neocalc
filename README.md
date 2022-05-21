@@ -20,10 +20,9 @@
 
 ### Requied Libraries
 
-#### libreadline
-- REPL
+- **libreadline**: For REPL
 
-#### [z_](https://github.com/zakarouf/z_)
+- [z_](https://github.com/zakarouf/z_)
   - String
   - Variables
   - Stack System
@@ -47,37 +46,70 @@ $ ./nc
 Welcome to neocalc (https://github.com/zakarouf/neocalc)
 neocalc 0.1.0 by zakarouf 2022-2023 (/q to exit)
 > 13
-stdout:13.000000
+_ is 13.000000
 ```
-Type any number to push to the default `stdout`.
+Type any number to push to the default variable `_`.
 
 ### Evaluation
 
-Expression are written in lisp like S-Expression.
+Expression are written in S-Expression like syntax.
 ```racket
 > (+ 1 2 3)
-stdout:6.000000
+_ is 6.000000
 ```
 
 They can be nested too!
 ```racket
 > (- 40 (* 12 4))
-stdout:-8.000000
+_ is -8.000000
 > (- 40 (* 12 4) (/ 22 7) (+ 24 (- 20 77)))
 stdout:21.857143
 ```
 
-### Variables
+### Defining Variables
 
-You can store a result of an expression inside a variable using `/s` command
+You can store a result of an expression inside a variable using `set` command
 ```racket
-> /s x (+ 1 2 3)
-x:6.000000
+> (set x (+ 1 2 3))
+> /v x
+x is 6.000000
 ```
+> NOTE: `/v` is a repl command that sets a result variable
 
 You can call that variable again inside an expression to use its value again.
 ```racket
 > (* 2 x)
-stdout:12.000000
+x is 12.000000
+```
+
+### Defining Expression
+
+One can define a expression like so
+```racket
+> (set @sqr (* #0 #0))
+> (@sqr 3)
+_ is 9.000000
+```
+> `#[0-9]+` is used to define a passed argument
+
+### Loading a file
+
+It is a hassle to set the same boilerplate symbols and values over and over
+again. Instead we can write all our definations and load it in when we need.
+```racket
+# util.txt
+(set @snd (+ (* 2 #0) 1))
+(set @sqr (* #0 #0))
+(set @sa (@sqr (@snd #0)))
+```
+> NOTE: Repl specific commands, i.e. `/v`, '/q' etc. are not valid here
+
+We load it up in our relp, like so
+```racket
+> (load util.txt)
+> (@sa 0)
+_ is 1.000000
+> (@sa 1)
+_ is 9.000000
 ```
 
