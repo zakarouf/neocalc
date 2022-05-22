@@ -1,0 +1,7 @@
+(set @sqr (* #0 #0))
+(set @cube (* (@sqr #0) #0))
+(set @quad (* (@cube #0) #0))
+(set PI 3.1415926535)
+(set RAD90 (/ PI 2))
+(set RAD270 (* RAD90 3))
+(set @dtorad (* 0.174533 #0))
