@@ -5,7 +5,7 @@ OUT="nc"
 CFILES="$(find src -name '*.c')"
 
 echo "Compiling\n"
-CC -Wall -Wextra -O2 -ggdb -c $CFILES
-CC $LDFLAGS -o $OUT *.o
+$CC -Wall -Wextra -O2 -Os -c $CFILES
+$CC $LDFLAGS -o $OUT *.o
 
-#rm -rf *.o
+rm -rf *.o
