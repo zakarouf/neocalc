@@ -27,13 +27,24 @@
     "neocalc " NC_VERSION " by zakarouf, (`/q` to exit or `/h` for help)"\
 
 #define NC_HELP\
+    z__ansi_fmt((bold), (underline))\
+    "About:\n"\
+    z__ansi_fmt((plain))\
     "Neocalc is a small calculator that uses reverse polish notation for its expression\n"\
     "Example:\n"\
     "   (+ 1 2 3)\n"\
     "\n"\
-    "(set <var> <value>) for setting a variable\n"\
-    "(set @<expr-name> <expr>) for setting a expression\n"\
-    "(@<expr-name> <arg-0> <arg-1> ... <arg-n>) for calling an expression\n"\
+    z__ansi_fmt((bold), (underline))\
+    "Syntax:\n"\
+    z__ansi_fmt((plain))\
+    " " z__ansi_fmt((bold), (underline))\
+    "1" z__ansi_fmt((plain)) ". (set <var> <value>) for setting a variable\n "\
+    z__ansi_fmt((bold), (underline))\
+    "2" z__ansi_fmt((plain)) ". (set @<expr-name> <expr>) for setting a expression\n "\
+    z__ansi_fmt((bold), (underline))\
+    "3" z__ansi_fmt((plain)) ". (@<expr-name> <arg-0> <arg-1> ... <arg-n>) for calling an expression\n "\
+    z__ansi_fmt((bold), (underline))\
+    "4" z__ansi_fmt((plain)) ". ($<builtin-name> <arg-0> <arg-1> ... <arg-n>) for calling built-in functions\n"\
     "Example:\n"\
     "   (set x 10)\n"\
     "   (set @sqr (* #0 #0))\n"\
@@ -42,6 +53,16 @@
     "\n"\
     "   (@sqr 3)        => 9\n"\
     "   (@sqr (- x 8))  => 4\n"\
+    "\n"\
+    z__ansi_fmt((bold), (underline))\
+    "REPL:\n"\
+    z__ansi_fmt((plain))\
+    " /q            Quit\n"\
+    " /h            Help\n"\
+    " /v            Change Result Variable\n"\
+    " /a            List all variables declared\n"\
+    " /b            List all built-in functions\n"\
+    " /e            List all defined expressions\n"\
 
 #define NC_REPL_PROMT "> "
 
@@ -68,6 +89,24 @@ void repl(nc_State *s)
                     break; case 'l': {
                         char const *name = z__str_skipget_nonws(line.data + 2, line.lenUsed-2);
                         nc_runfile(s, name);
+                    }
+                    break; case 'b': {
+                        fputs(z__ansi_fmt((bold), (underline), (cl256_fg, 2))
+                                "Built-in Functions:"
+                              z__ansi_fmt((plain)) "\n", stdout);
+                        nc_printall_builtin(s);
+                    }
+                    break; case 'e': {
+                        fputs(z__ansi_fmt((bold), (underline), (cl256_fg, 2))
+                                "Defined Expressions:"
+                              z__ansi_fmt((plain)) "\n", stdout);
+                        nc_printall_expr(s);
+                    }
+                    break; case 'a': {
+                        fputs(z__ansi_fmt((bold), (underline), (cl256_fg, 2))
+                                "Declared Variables:"
+                              z__ansi_fmt((plain)) "\n", stdout);
+                        nc_printall_var(s);
                     }
                     break; case 'h': {
                         z__fprint(stdout, "%s", NC_HELP);
@@ -101,6 +140,8 @@ void repl(nc_State *s)
 int main (z__i32 argc, char *argv[])
 {   
     nc_State *state = nc_State_new();
+    extern void nc_State_defmath(nc_State *s);
+    nc_State_defmath(state);
 
     /* Initialize repl if no arguments are given */
     if(argc < 2) {
