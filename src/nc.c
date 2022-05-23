@@ -1,5 +1,6 @@
 /* Extern */
 #include <stdio.h>
+#include <z_/imp/tgprint.h>
 #include <z_/types/hashhoyt.h>
 #define NC_DEVELOPMENT
 #include "nc.h"
@@ -617,6 +618,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
                     nc_State_setvar(s, name, atof(&get(tok)));
                 } else if(get(tok) == '(') {
                     char *exprn = &get(tok);
+                    toknext(1);
                     z__u64 brac = 1;
                     while(brac) {
                         if(get(tok) == '(') brac ++;
@@ -629,8 +631,29 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
                         } 
                         toknext(1);
                     }
-                    nc_State_setexpr(s, "__main__", z__Str(exprn, &get(tok) - exprn-1));
-                    nc_State_setvar(s, name, nc_eval_expr(s, "__main__", 0, 0));
+                    nc_State_setexpr(s, "__main__", z__Str(exprn, &get(tok) - exprn));
+                   
+                    // Check for reapeated expression
+                    toknext(1);
+                    tokskip(" \n\t");
+                    z__i64 repeat = 0;
+                    if(isidentbegin(get(tok))) {
+                        z__char *ident = &get(tok);
+                        while(isident(get(tok))) toknext(1);
+                        z__char ch = get(tok);
+                        get(tok) = 0;
+                        repeat = nc_State_getval(s, ident);
+                        get(tok) = ch;
+                    } else {
+                        repeat = atoll(&get(tok));
+                    }
+                    nc_State_setvar(s, name, 0);
+                    z__f64 *v = nc_State_getvar(s, name);
+                    do {
+                        *v = nc_eval_expr(s, "__main__", 0, 0);
+                        repeat --;
+                    } while(repeat > 0);
+
                 } else if(isidentbegin(get(tok))) {
                     char const *vname = &get(tok);
                     tok(")");
