@@ -217,12 +217,11 @@ void nc_State_setexpr(nc_State *s, const char *name, const z__Str expr_raw)
 }
 
 static
-void nc_State_push_estate(nc_State *s, z__u64 tok, z__u64 prevtok, z__u64 result, z__u64 passed,nc_Expr const *expr)
+void nc_State_push_estate(nc_State *s, z__u64 tok, z__u64 prevtok, z__u64 passed,nc_Expr const *expr)
 {
     z__Arr_push(&s->estates, (nc_ExprState){
             .tok = tok,
             .prevtok = prevtok,
-            .result = result,
             .expr = expr,
             .passed = passed,
         });
@@ -288,13 +287,13 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
      * Basic parsing macros wrapper to make stuff easier
      */
     #define tok(w) {\
-        prevtok = tok; tok = z__String_tok(expr->expr, prevtok, z__Str(w, sizeof(w)));\
+        tok = z__String_tok(expr->expr, tok, z__Str(w, sizeof(w)));\
     }
     #define tokskip(w) {\
-        prevtok = tok; tok = z__String_tokskip(expr->expr, prevtok, z__Str(w, sizeof(w)));\
+        tok = z__String_tokskip(expr->expr, tok, z__Str(w, sizeof(w)));\
     }
     #define tokset(w) {\
-        prevtok = tok; tok = w;\
+        tok = w;\
     }
     #define toknext(w) tokset(tok + w)
     #define get(idx) (expr->expr.data[idx])
@@ -351,7 +350,7 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
         nc_printall_expr(s);
     }
 
-    nc_State_push_estate(s, 0, 0, 0, _passed, expr);
+    nc_State_push_estate(s, 0, 0, _passed, expr);
     for (size_t i = 0; i < _passed; i++) {
         nc_Stacks_push_val(&s->stacks, _pass[i]);
     }
@@ -374,6 +373,7 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
             toknext(1);
             tokskip(" \n\t");
             z__char *p = &get(tok);
+            prevtok = tok;
             tok(" \n\t");
             nc_Stacks_push_retpoint(&s->stacks, z__Str(p, tok - prevtok - 1));
             ast_retpush(p, tok - prevtok -1);
@@ -404,7 +404,7 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
                     , "Expression does not exist %s", op.data);
 
                 nc_State_push_estate(s
-                        , 0, 0, 0
+                        , 0, 0
                         , retdiff
                         , expr_new);
 
@@ -552,20 +552,21 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
      * Parsing utility
      */
     #define tok(w) {\
-        prevtok = tok; tok = z__String_tok(\
-                *nc_cmd, prevtok, z__Str(w, sizeof(w)));\
+        tok = z__String_tok(\
+                *nc_cmd, tok, z__Str(w, sizeof(w)));\
     }
     #define tokskip(w) {\
-        prevtok = tok; tok = z__String_tokskip(\
-                *nc_cmd, prevtok, z__Str(w, sizeof(w)));\
+        tok = z__String_tokskip(\
+                *nc_cmd, tok, z__Str(w, sizeof(w)));\
     }
+#undef tokset
     #define tokset(w) {\
-        prevtok = tok; tok = w;\
+        tok = w;\
     }
     #define toknext(w) tokset(tok + w)
     #define get(idx) (nc_cmd->data[idx])
    
-    z__u64 tok = 0, prevtok = 0;
+    z__u64 tok = 0;
 
     tokskip(" \t\n");
 
@@ -649,10 +650,9 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
                     }
                     nc_State_setvar(s, name, 0);
                     z__f64 *v = nc_State_getvar(s, name);
-                    do {
+                    for(;repeat > 0; repeat--) {
                         *v = nc_eval_expr(s, "__main__", 0, 0);
-                        repeat --;
-                    } while(repeat > 0);
+                    }
 
                 } else if(isidentbegin(get(tok))) {
                     char const *vname = &get(tok);

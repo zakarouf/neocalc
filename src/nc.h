@@ -67,9 +67,8 @@ typedef struct nc_Expr {
  * State of the expression evaluated;
  */
 typedef struct {
-    z__u64 tok, prevtok, passed;
+    z__u64 tok, prevtok, passed, repeat;
     z__i64 brac;
-    z__f64 result;
     const nc_Expr *expr;
 } nc_ExprState;
 typedef z__Arr(nc_ExprState) nc_ExprStates;
