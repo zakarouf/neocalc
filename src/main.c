@@ -114,7 +114,7 @@ void repl(nc_State *s)
                     default: break;
                 }
             } else {
-                z__f64 *res = nc_State_getvar(s, res_var.data);
+                nc_float *res = nc_State_getvar(s, res_var.data);
                 if(res) {
                     nc_eval(s, &line, res);
                     z__fprint(stdout,
@@ -124,6 +124,7 @@ void repl(nc_State *s)
                             , res_var.data, *res);
                 } else {
                     z__fprint(stdout, z__ansi_fmt((bold)) "Var `%s` is not set" z__ansi_fmt((plain)) "\n", res_var.data);
+                    z__String_replaceStr(&res_var, "_", 1);
                 }
             }
             free(_e);
@@ -153,7 +154,7 @@ int main (z__i32 argc, char *argv[])
 
     /* Do evaluation and exit */
     } else {
-        z__f64 res = 0;
+        nc_float res = 0;
         z__String cmd = z__String_new(256);
         for (z__i32 i = 1; i < argc; i++) {
             z__String_replaceStr(&cmd, argv[i], strlen(argv[i]));
@@ -164,6 +165,7 @@ int main (z__i32 argc, char *argv[])
     }
 
     nc_State_delete(state);
-    return 0;
+
+    return EXIT_SUCCESS;
 }
 

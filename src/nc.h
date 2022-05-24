@@ -1,23 +1,22 @@
 #ifndef ZAKAROUF_NEOCALC_H
 #define ZAKAROUF_NEOCALC_H
 
-#include <z_/types/base.h>
 #include <z_/types/string.h>
-#include <stdio.h>
 
 typedef struct nc_State nc_State;
+typedef double nc_float;
 
 nc_State* nc_State_new(void);
 void nc_State_delete(nc_State *s);
 
-void nc_State_setvar(nc_State *s, const char *name, z__f64 val);
+void nc_State_setvar(nc_State *s, const char *name, nc_float val);
 void nc_State_setexpr(nc_State *s, const char *name, const z__Str expr_raw);
-z__f64 nc_State_getval(nc_State *s, const char *name);
-z__f64 *nc_State_getvar(nc_State *s, const char *name);
+nc_float nc_State_getval(nc_State *s, const char *name);
+nc_float *nc_State_getvar(nc_State *s, const char *name);
 
-z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _passed);
-int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res);
-z__f64 nc_runfile(nc_State *s, const char *name);
+nc_float nc_eval_expr(nc_State *s, const char *expr_name, nc_float *_pass, z__u64 _passed);
+int nc_eval(nc_State *s, z__String *nc_cmd, nc_float *res);
+nc_float nc_runfile(nc_State *s, const char *name);
 
 void nc_printall_data(nc_State *s);
 void nc_printall_var(nc_State *s);
@@ -53,6 +52,11 @@ void nc_State_setlogfile(FILE *logfp);
 
 /* Assertion */
 #include <z_/prep/nm/assert.h>
+
+/**
+ */
+typedef z__Arr(nc_float) nc_floatArr;
+
 /**
  * Expression Type
  * Stores the Expression data; and
@@ -76,7 +80,7 @@ typedef z__Arr(nc_ExprState) nc_ExprStates;
 /**
  * Variable Table
  */
-typedef z__HashHoyt(z__f64) nc_VarTable;
+typedef z__HashHoyt(nc_float) nc_VarTable;
 
 /**
  * Expression Table
@@ -85,7 +89,7 @@ typedef z__HashHoyt(nc_Expr) nc_ExprTable;
 
 /**
  */
-typedef z__f64 (* nc_builtin_Fn)(nc_State *s, char *rest_expr);
+typedef nc_float (* nc_builtin_Fn)(nc_State *s, char *rest_expr);
 typedef z__HashHoyt(nc_builtin_Fn) nc_builtin_FnTable;
 
 /**
@@ -103,7 +107,7 @@ typedef struct {
  * Single Layered Stack System
  */
 typedef struct {
-    z__f64Arr v;
+    nc_floatArr v;
     z__Arr( nc_RetPoint ) retpoints;
 } nc_Stacks;
 

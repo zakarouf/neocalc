@@ -1,6 +1,7 @@
 /* Extern */
 #include <stdio.h>
 #include <z_/imp/tgprint.h>
+#include <z_/types/base_util.h>
 #include <z_/types/hashhoyt.h>
 #define NC_DEVELOPMENT
 #include "nc.h"
@@ -11,10 +12,10 @@
 void nc_printall_data(nc_State *s)
 {
     if(s->logfp == NULL) return;
-    z__f64Arr v = s->stacks.v;
+    nc_floatArr v = s->stacks.v;
     fputs("[ " z__ansi_fmt((cl256_fg, 4)) , s->logfp);
     z__Arr_foreach(i, v){
-        fprintf(s->logfp, "%f ", *i);
+        fprintf(s->logfp, "%.g ", *i);
     }
     fputs( z__ansi_fmt((plain)) "]\n", s->logfp);
 }
@@ -46,6 +47,19 @@ void nc_printall_builtin(nc_State *s)
     z__HashHoyt_foreach(e, &s->fns) {
         fprintf(s->logfp, "(%s)\n", e->key);
     }
+}
+
+/**
+ */
+static inline
+z__u64 _skip_whitespace(z__String const str, z__u64 idx)
+{
+    if(idx >= str.lenUsed) return str.lenUsed;
+    register z__char *ch = str.data + idx;
+    while(*ch == ' '
+        ||*ch == '\n'
+        ||*ch == '\t') ch++;
+    return ch - (str.data);
 }
 
 /**
@@ -108,7 +122,7 @@ void nc_Stacks_push_retpoint(nc_Stacks *st, z__Str app)
 }
 
 static
-void nc_Stacks_pop_retpoint(nc_Stacks *st, z__f64 res)
+void nc_Stacks_pop_retpoint(nc_Stacks *st, nc_float res)
 {
     st->v.lenUsed = z__Arr_getTop(st->retpoints).ret;
     z__Arr_pop_nocheck(&st->retpoints);
@@ -125,7 +139,7 @@ z__u64 nc_Stacks_retdiff(nc_Stacks *st)
 }
 
 static
-void nc_Stacks_push_val(nc_Stacks *st, z__f64 val)
+void nc_Stacks_push_val(nc_Stacks *st, nc_float val)
 {
     z__Arr_push(&st->v, val);
 }
@@ -169,21 +183,21 @@ void nc_State_setfn(nc_State *s, const char *name, nc_builtin_Fn fn)
     z__HashHoyt_set(&s->fns, name, fn);
 }
 
-void nc_State_setvar(nc_State *s, const char *name, z__f64 val)
+void nc_State_setvar(nc_State *s, const char *name, nc_float val)
 {
     z__HashHoyt_set(&s->vars, name, val);
 }
 
-z__f64 *nc_State_getvar(nc_State *s, const char *name)
+nc_float *nc_State_getvar(nc_State *s, const char *name)
 {
-    z__f64 *v = NULL;
+    nc_float *v = NULL;
     z__HashHoyt_getreff(&s->vars, name, v);
     return v;
 }
 
-z__f64 nc_State_getval(nc_State *s, const char *name)
+nc_float nc_State_getval(nc_State *s, const char *name)
 {
-    z__f64 *v = NULL;
+    nc_float *v = NULL;
     z__HashHoyt_getreff(&s->vars, name, v);
     if(v == NULL) {
         nc_pwarn(s->logfp, "'%s' var does not exist", name);
@@ -233,7 +247,7 @@ void nc_State_pop_estate(nc_State *s)
     z__Arr_pop_nocheck(&s->estates);
 }
 
-static inline z__f64 nc_State_call_fns(nc_State *s, const char *name, char *rest_expr)
+static inline nc_float nc_State_call_fns(nc_State *s, const char *name, char *rest_expr)
 {
     nc_builtin_Fn *fn;
     z__HashHoyt_getreff(&s->fns, name, fn);
@@ -245,27 +259,28 @@ static inline z__f64 nc_State_call_fns(nc_State *s, const char *name, char *rest
 }
 
 static
-z__f64 nc_list_op(nc_State *state, z__Str op)
+nc_float nc_list_op(nc_State *state, z__Str op)
 {
     nc_Stacks *s = &state->stacks;
-    z__f64 *start = &z__Arr_getVal(s->v, z__Arr_getTop(s->retpoints).ret);
-    z__f64 *end = &z__Arr_getTopEmpty(s->v);
+    nc_float *start = &z__Arr_getVal(s->v, z__Arr_getTop(s->retpoints).ret);
+    nc_float *end = &z__Arr_getTopEmpty(s->v);
 
-    z__f64 result = *start;
-#define op_action_sin(op, ch)\
-    break; case ch:\
-        start ++;\
-        while(start < end) {\
-            result zpp__CAT(op, =) *start;\
-            start ++;\
-        }
+    nc_float result = *start;
+    start++;
+
+    #define op_action_sin(op, ch)\
+        break; case ch:\
+            while(start < end) {\
+                result zpp__CAT(op, =) *start;\
+                start ++;\
+            }
 
     switch (op.data[0]) {
         op_action_sin(+, '+');
         op_action_sin(-, '-');
         op_action_sin(*, '*');
         op_action_sin(/, '/');
-        
+
         break; default: {
             if(isdigit(op.data[0]) || op.data[0] == '.') {
                 return atof(op.data);
@@ -281,7 +296,7 @@ z__f64 nc_list_op(nc_State *state, z__Str op)
     return result;
 }
 
-z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _passed)
+nc_float nc_eval_expr(nc_State *s, const char *expr_name, nc_float *_pass, z__u64 _passed)
 {
     /**
      * Basic parsing macros wrapper to make stuff easier
@@ -292,10 +307,13 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
     #define tokskip(w) {\
         tok = z__String_tokskip(expr->expr, tok, z__Str(w, sizeof(w)));\
     }
+    #define tokskip_whitespace() {\
+        tok = _skip_whitespace(expr->expr, tok);\
+    }
     #define tokset(w) {\
         tok = w;\
     }
-    #define toknext(w) tokset(tok + w)
+    #define toknext(w) tokset(tok + (w))
     #define get(idx) (expr->expr.data[idx])
     #define exprend() (expr->expr.lenUsed <= tok)
 
@@ -319,6 +337,7 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
      * For debug purpose
      */
     #if NC_AST
+        #define ast_(...) __VA_ARGS__
         #define ast_print(fmt, ...) nc_print(s->logfp, "ast >> " fmt "\n",##__VA_ARGS__)
         #define ast_retpush(type, sz)\
                 ast_print("|ret push => %d" , s->stacks.retpoints.lenUsed);
@@ -329,6 +348,7 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
         #define ast_data_print(v) nc_data_print(v)
         #define ast_tgprint(...) z__tfprint(s->logfp, __VA_ARGS__)
     #else
+        #define ast_(...) 
         #define ast_print(...) 
         #define ast_retpush(...) 
         #define ast_retpop(...)
@@ -356,14 +376,14 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
     }
 
     z__u64 tok, prevtok;
-    z__f64 res = 0;
+    nc_float res = 0;
     z__u64 brac = 0;
 
     _L_restart:;
     expr_state_load();
 
     if(iswhitespace(get(0))) {
-        tokskip(" \n\t");
+        tokskip_whitespace();
     }
 
     while(!exprend()) {
@@ -371,7 +391,7 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
         if(get(tok) == '(') {
             brac ++;
             toknext(1);
-            tokskip(" \n\t");
+            tokskip_whitespace();
             z__char *p = &get(tok);
             prevtok = tok;
             tok(" \n\t");
@@ -489,7 +509,7 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
 
         /* Should not happen in a proper expression */
         } else {
-            nc_pwarn(s->logfp, "Unknown Token at -> `%5s`", &get(tok));
+            ast_( nc_pwarn(s->logfp, "Unknown Token at -> `%5s`", &get(tok)) );
             toknext(1);
         }
     }
@@ -502,11 +522,13 @@ z__f64 nc_eval_expr(nc_State *s, const char *expr_name, z__f64 *_pass, z__u64 _p
     return res;
 
     #undef tok
+    #undef tokset
     #undef tokskip
+    #undef tokskip_whitespace
     #undef get
 }
 
-z__f64 nc_runfile(nc_State *s, const char *name)
+nc_float nc_runfile(nc_State *s, const char *name)
 {
     z__String file = z__String_newFromFile(name);
     if(!file.data) {
@@ -534,41 +556,45 @@ z__f64 nc_runfile(nc_State *s, const char *name)
         idx ++;
     }
 
-    z__f64 res = 0;
+    nc_float res = 0;
     z__Arr_foreach(i, cmds) {
         z__String cmd = z__String_bind(i->start, i->end - i->start+1);
         nc_eval(s, &cmd, &res);
     }
     z__Arr_delete(&cmds);
+    z__String_delete(&file);
 
     return res;
 
     #undef get
 }
 
-int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
+int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
 {
     /**
      * Parsing utility
      */
+    z__String nc_cmd = *cmd;
     #define tok(w) {\
         tok = z__String_tok(\
-                *nc_cmd, tok, z__Str(w, sizeof(w)));\
+                nc_cmd, tok, z__Str(w, sizeof(w)));\
     }
     #define tokskip(w) {\
         tok = z__String_tokskip(\
-                *nc_cmd, tok, z__Str(w, sizeof(w)));\
+                nc_cmd, tok, z__Str(w, sizeof(w)));\
     }
-#undef tokset
+    #define tokskip_whitespace() {\
+        tok = _skip_whitespace(nc_cmd, tok);\
+    }
     #define tokset(w) {\
         tok = w;\
     }
-    #define toknext(w) tokset(tok + w)
-    #define get(idx) (nc_cmd->data[idx])
+    #define toknext(w) tokset(tok + (w))
+    #define get(idx) (nc_cmd.data[idx])
    
     z__u64 tok = 0;
 
-    tokskip(" \t\n");
+    tokskip_whitespace();
 
     /* Define a variable or an expression */
     if(isparen_open(get(tok))) {
@@ -577,7 +603,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
         && get(tok+3) == 't'
         && iswhitespace(get(tok+4))) {
             toknext(5);
-            tokskip(" \n\t");
+            tokskip_whitespace();
 
             /* Define a expression */
             if(get(tok) == '@') {
@@ -613,11 +639,17 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
                 }
                 get(tok) = 0;
                 toknext(1);
-                tokskip(" \n\t");
+                tokskip_whitespace();
                 
+                /* Its Float literal */
                 if(isfloat(get(tok))) {
                     nc_State_setvar(s, name, atof(&get(tok)));
+
+                /* Its an expression, 
+                 * we evaluate the expression and store the result as is */
                 } else if(get(tok) == '(') {
+
+                    /* Fetch the expression */
                     char *exprn = &get(tok);
                     toknext(1);
                     z__u64 brac = 1;
@@ -632,12 +664,14 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
                         } 
                         toknext(1);
                     }
+
+                    /* Set the expression */
                     nc_State_setexpr(s, "__main__", z__Str(exprn, &get(tok) - exprn));
                    
-                    // Check for reapeated expression
+                    /* Check for reapeated calls */
+                    z__i32 repeat = 1;
                     toknext(1);
-                    tokskip(" \n\t");
-                    z__i64 repeat = 0;
+                    tokskip_whitespace();
                     if(isidentbegin(get(tok))) {
                         z__char *ident = &get(tok);
                         while(isident(get(tok))) toknext(1);
@@ -645,11 +679,13 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
                         get(tok) = 0;
                         repeat = nc_State_getval(s, ident);
                         get(tok) = ch;
-                    } else {
-                        repeat = atoll(&get(tok));
+                    } else if(isdigit(get(tok))) {
+                        repeat = atoi(&get(tok));
                     }
-                    nc_State_setvar(s, name, 0);
-                    z__f64 *v = nc_State_getvar(s, name);
+
+                    /* Evaluate and store */
+                    nc_float *v = nc_State_getvar(s, name);
+                    if(!v) nc_State_setvar(s, name, 0);
                     for(;repeat > 0; repeat--) {
                         *v = nc_eval_expr(s, "__main__", 0, 0);
                     }
@@ -679,7 +715,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
                && get(tok + 4) == 'd'
                && iswhitespace(get(tok + 5))) {
             toknext(6);
-            tokskip(" \n\t");
+            tokskip_whitespace();
 
             char *name = &get(tok);
             tok("\t\n)");
@@ -690,7 +726,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
 
         /* Whatever is passed starts with a '(' so as a last resort, evaluate it as an expression */
         } else {
-            nc_State_setexpr(s, "__main__", z__Str(nc_cmd->data, nc_cmd->lenUsed));
+            nc_State_setexpr(s, "__main__", z__Str(nc_cmd.data, nc_cmd.lenUsed));
             *res = nc_eval_expr(s, "__main__", 0, 0);
         }
 
@@ -702,7 +738,7 @@ int nc_eval(nc_State *s, z__String *nc_cmd, z__f64 *res)
     } else if(isidentbegin(get(tok))) {
         *res = nc_State_getval(s, &get(tok));
     }
-
+    
     return 0;
 }
 
