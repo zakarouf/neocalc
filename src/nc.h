@@ -13,8 +13,9 @@ void nc_State_setvar(nc_State *s, const char *name, nc_float val);
 void nc_State_setexpr(nc_State *s, const char *name, const z__Str expr_raw);
 nc_float nc_State_getval(nc_State *s, const char *name);
 nc_float *nc_State_getvar(nc_State *s, const char *name);
+long nc_State_getexpr_id(nc_State *s, const char *name);
 
-nc_float nc_eval_expr(nc_State *s, const char *expr_name, nc_float *_pass, z__u64 _passed);
+nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed);
 int nc_eval(nc_State *s, z__String *nc_cmd, nc_float *res);
 nc_float nc_runfile(nc_State *s, const char *name);
 
@@ -178,6 +179,8 @@ typedef struct nc_State {
 #define iswhitespace(c)  ((c) == ' ' || (c) == '\n' || (c) == '\t')
 #define isidentbegin(c)  ((c) == '_' || isalpha(c))
 #define isident(c)       ((c) == '_' || isalnum(c))
+#undef isdigit
+#define isdigit(c)       ((c) >= '0' && (c) <= '9')
 #define isfloat(c)       (isdigit(c) || (c) == '.' || (c) == '-')
 
 /* Assert Implementation */
