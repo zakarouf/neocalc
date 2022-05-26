@@ -216,6 +216,17 @@ nc_Expr const * nc_State_getexpr(nc_State *s, const char *name)
     return expr;
 }
 
+long nc_State_getexpr_id(nc_State *s, const char *name)
+{
+    long index;
+    z__HashHoyt_getidx(&s->exprs, name, &index);
+    if(index == -1) {
+        nc_perr(s->logfp, "'%s' symbol id not found", name);
+        return -1;
+    }
+    return index;
+}
+
 void nc_State_setexpr(nc_State *s, const char *name, const z__Str expr_raw)
 {
     nc_Expr *expr;
@@ -296,7 +307,7 @@ nc_float nc_list_op(nc_State *state, z__Str op)
     return result;
 }
 
-nc_float nc_eval_expr(nc_State *s, const char *expr_name, nc_float *_pass, z__u64 _passed)
+nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed)
 {
     /**
      * Basic parsing macros wrapper to make stuff easier
@@ -345,8 +356,8 @@ nc_float nc_eval_expr(nc_State *s, const char *expr_name, nc_float *_pass, z__u6
         #define ast_retpop() ast_print("ret pop => %d, brac %llu", s->stacks.retpoints.lenUsed, brac)
         #define ast_est_pop() ast_print("")
         #define ast_est_push(d, v) ast_print("# EST PUSH: %s, %llu", d, v);
-        #define ast_data_print(v) nc_data_print(v)
-        #define ast_tgprint(...) z__tfprint(s->logfp, __VA_ARGS__)
+        #define ast_data_print(v) nc_printall_data(v)
+        #define ast_tgprint(...) z__tgfprint(s->logfp, __VA_ARGS__)
     #else
         #define ast_(...) 
         #define ast_print(...) 
@@ -365,17 +376,15 @@ nc_float nc_eval_expr(nc_State *s, const char *expr_name, nc_float *_pass, z__u6
      * The state is saved and loaded on the run,
      * therefore making nc_eval_expr() independent
      */
-    nc_Expr const *expr = nc_State_getexpr(s, expr_name);
-    if(!expr) {
-        nc_printall_expr(s);
-    }
+    nc_Expr const *expr = &s->exprs.entries[expr_id].value;
 
     nc_State_push_estate(s, 0, 0, _passed, expr);
     for (size_t i = 0; i < _passed; i++) {
         nc_Stacks_push_val(&s->stacks, _pass[i]);
     }
 
-    z__u64 tok, prevtok;
+    z__u64 register tok;
+    z__u64 prevtok;
     nc_float res = 0;
     z__u64 brac = 0;
 
@@ -390,13 +399,20 @@ nc_float nc_eval_expr(nc_State *s, const char *expr_name, nc_float *_pass, z__u6
         ast_tgprint("==>>", (const char *)&get(tok));
         if(get(tok) == '(') {
             brac ++;
+
+            /* Move past the bracket */
             toknext(1);
+
+            /* Skip any whitespaces, if any */
             tokskip_whitespace();
+
+            /* Its a method name, grab it */
             z__char *p = &get(tok);
             prevtok = tok;
-            tok(" \n\t");
-            nc_Stacks_push_retpoint(&s->stacks, z__Str(p, tok - prevtok - 1));
-            ast_retpush(p, tok - prevtok -1);
+            while(!iswhitespace(get(tok))) toknext(1);
+
+            nc_Stacks_push_retpoint(&s->stacks, z__Str(p, tok - prevtok));
+            ast_retpush(p, tok - prevtok);
 
         } else if(get(tok) == ')') {
             /**
@@ -505,7 +521,7 @@ nc_float nc_eval_expr(nc_State *s, const char *expr_name, nc_float *_pass, z__u6
 
         /* Skip whitespace */
         } else if(iswhitespace(get(tok))) {
-            tok(" \t\n");
+            tokskip_whitespace();
 
         /* Should not happen in a proper expression */
         } else {
@@ -685,9 +701,13 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
 
                     /* Evaluate and store */
                     nc_float *v = nc_State_getvar(s, name);
-                    if(!v) nc_State_setvar(s, name, 0);
+                    if(!v) {
+                        nc_State_setvar(s, name, 0);
+                        v = nc_State_getvar(s, name);
+                    }
+                    long main_id = nc_State_getexpr_id(s, "__main__");
                     for(;repeat > 0; repeat--) {
-                        *v = nc_eval_expr(s, "__main__", 0, 0);
+                        *v = nc_eval_expr(s, main_id, 0, 0);
                     }
 
                 } else if(isidentbegin(get(tok))) {
@@ -727,7 +747,7 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
         /* Whatever is passed starts with a '(' so as a last resort, evaluate it as an expression */
         } else {
             nc_State_setexpr(s, "__main__", z__Str(nc_cmd.data, nc_cmd.lenUsed));
-            *res = nc_eval_expr(s, "__main__", 0, 0);
+            *res = nc_eval_expr(s, nc_State_getexpr_id(s, "__main__"), 0, 0);
         }
 
     /* We got a number */
