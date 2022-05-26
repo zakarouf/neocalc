@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <z_/imp/tgprint.h>
 #include <z_/types/base_util.h>
+#include <z_/types/contof.h>
 #include <z_/types/hashhoyt.h>
 #define NC_DEVELOPMENT
 #include "nc.h"
@@ -533,6 +534,7 @@ nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed
     /* Rewind Stack to be 0 */
     s->stacks.v.lenUsed = 0;
     s->stacks.retpoints.lenUsed = 0;
+    s->estates.lenUsed = 0;
 
     /* Return whatever the result is */
     return res;
