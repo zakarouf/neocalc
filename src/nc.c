@@ -294,7 +294,7 @@ nc_float nc_list_op(nc_State *state, z__Str op)
         op_action_sin(/, '/');
 
         break; default: {
-            if(isdigit(op.data[0]) || op.data[0] == '.') {
+            if(nc_isdigit(op.data[0]) || op.data[0] == '.') {
                 return atof(op.data);
             } else {
                 nc_pwarn(
@@ -392,7 +392,7 @@ nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed
     _L_restart:;
     expr_state_load();
 
-    if(iswhitespace(get(0))) {
+    if(nc_iswhitespace(get(0))) {
         tokskip_whitespace();
     }
 
@@ -410,7 +410,7 @@ nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed
             /* Its a method name, grab it */
             z__char *p = &get(tok);
             prevtok = tok;
-            while(!iswhitespace(get(tok))) toknext(1);
+            while(!nc_iswhitespace(get(tok))) toknext(1);
 
             nc_Stacks_push_retpoint(&s->stacks, z__Str(p, tok - prevtok));
             ast_retpush(p, tok - prevtok);
@@ -489,22 +489,6 @@ nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed
                     goto _L_restart;
                 }
             }
-        
-        /* Push a literal value to the data stack */
-        } else if(isdigit(get(tok)) || get(tok) == '.' || get(tok) == '-') {
-            nc_Stacks_push_val(&s->stacks, atof(&get(tok)));
-            ast_data_print(s);
-            while(get(tok) == '.' || isdigit(get(tok))) toknext(1);
-
-        /* Push a value of a variable to the data stack */
-        } else if(isidentbegin(get(tok))) {
-            z__u64 tmp = tok;
-            while(isident(get(tok))) toknext(1);
-            z__char ch = get(tok);
-            get(tok) = 0;
-            nc_Stacks_push_val(&s->stacks, nc_State_getval(s, &get(tmp)));
-            ast_data_print(s);
-            get(tok) = ch;
 
         /* Push a value of a argument passed to the data stack */
         } else if(get(tok) == '#') {
@@ -514,21 +498,33 @@ nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed
                       s->stacks.retpoints
                     , retidx).ret + atoi(&get(tok));
            
-            while(isdigit(get(tok))) toknext(1);
+            while(nc_isdigit(get(tok))) toknext(1);
 
             ast_tgprint("-> passed :", _passed, "bracs", brac, "retidx", retidx);
             nc_Stacks_push_val(&s->stacks, s->stacks.v.data[_passed]);
             ast_data_print(s);
 
-        /* Skip whitespace */
-        } else if(iswhitespace(get(tok))) {
-            tokskip_whitespace();
+        /* Push a value of a variable to the data stack */
+        } else if(nc_isidentbegin(get(tok))) {
+            z__u64 tmp = tok;
+            while(nc_isident(get(tok))) toknext(1);
+            z__char ch = get(tok);
+            get(tok) = 0;
+            nc_Stacks_push_val(&s->stacks, nc_State_getval(s, &get(tmp)));
+            ast_data_print(s);
+            get(tok) = ch;
 
-        /* Should not happen in a proper expression */
+        /* Push a literal value to the data stack */
         } else {
-            ast_( nc_pwarn(s->logfp, "Unknown Token at -> `%5s`", &get(tok)) );
+            nc_Stacks_push_val(&s->stacks, atof(&get(tok)));
+            ast_data_print(s);
             toknext(1);
+            while(nc_isdigit(get(tok)) || get(tok) == '.') toknext(1);
         }
+
+        /* Skip whitespace */
+        if(nc_iswhitespace(get(tok)))
+            tokskip_whitespace();
     }
    
     /* Rewind Stack to be 0 */
@@ -615,11 +611,11 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
     tokskip_whitespace();
 
     /* Define a variable or an expression */
-    if(isparen_open(get(tok))) {
+    if(nc_isparen_open(get(tok))) {
         if(get(tok+1) == 's'
         && get(tok+2) == 'e'
         && get(tok+3) == 't'
-        && iswhitespace(get(tok+4))) {
+        && nc_iswhitespace(get(tok+4))) {
             toknext(5);
             tokskip_whitespace();
 
@@ -627,7 +623,7 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
             if(get(tok) == '@') {
                 toknext(1);
                 char *exprn = &get(tok);
-                while(!iswhitespace(get(tok))) toknext(1);
+                while(!nc_iswhitespace(get(tok))) toknext(1);
                 get(tok) = 0;
                 
                 toknext(1);
@@ -650,9 +646,9 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
                 nc_State_setexpr(s, exprn, z__Str(&get(start), tok - start - 1));
 
             /* Define a variable */
-            } else if (isidentbegin(get(tok))) {
+            } else if (nc_isidentbegin(get(tok))) {
                 char const *name = &get(tok);
-                while(isident(get(tok))) {
+                while(nc_isident(get(tok))) {
                     toknext(1);
                 }
                 get(tok) = 0;
@@ -660,7 +656,7 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
                 tokskip_whitespace();
                 
                 /* Its Float literal */
-                if(isfloat(get(tok))) {
+                if(nc_isfloat(get(tok))) {
                     nc_State_setvar(s, name, atof(&get(tok)));
 
                 /* Its an expression, 
@@ -690,14 +686,14 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
                     z__i32 repeat = 1;
                     toknext(1);
                     tokskip_whitespace();
-                    if(isidentbegin(get(tok))) {
+                    if(nc_isidentbegin(get(tok))) {
                         z__char *ident = &get(tok);
-                        while(isident(get(tok))) toknext(1);
+                        while(nc_isident(get(tok))) toknext(1);
                         z__char ch = get(tok);
                         get(tok) = 0;
                         repeat = nc_State_getval(s, ident);
                         get(tok) = ch;
-                    } else if(isdigit(get(tok))) {
+                    } else if(nc_isdigit(get(tok))) {
                         repeat = atoi(&get(tok));
                     }
 
@@ -712,7 +708,7 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
                         *v = nc_eval_expr(s, main_id, 0, 0);
                     }
 
-                } else if(isidentbegin(get(tok))) {
+                } else if(nc_isidentbegin(get(tok))) {
                     char const *vname = &get(tok);
                     tok(")");
                     get(tok-1) = 0;
@@ -735,7 +731,7 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
                && get(tok + 2) == 'o'
                && get(tok + 3) == 'a'
                && get(tok + 4) == 'd'
-               && iswhitespace(get(tok + 5))) {
+               && nc_iswhitespace(get(tok + 5))) {
             toknext(6);
             tokskip_whitespace();
 
@@ -753,14 +749,13 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
         }
 
     /* We got a number */
-    } else if(isfloat(get(tok))) {
+    } else if(nc_isfloat(get(tok))) {
         *res = atof(&get(tok));
 
     /* We got a variable */
-    } else if(isidentbegin(get(tok))) {
+    } else if(nc_isidentbegin(get(tok))) {
         *res = nc_State_getval(s, &get(tok));
     }
     
     return 0;
 }
-

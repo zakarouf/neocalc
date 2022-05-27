@@ -173,15 +173,23 @@ typedef struct nc_State {
     #define DEBUG_CHECK(...)
 #endif
 
-#define isparen_open(c)  ((c) == '(')
-#define isparen_close(c) ((c) == ')')
-#define isparen(c)       (isparen_open(c) || isparen_close(c))
-#define iswhitespace(c)  ((c) == ' ' || (c) == '\n' || (c) == '\t')
-#define isidentbegin(c)  ((c) == '_' || isalpha(c))
-#define isident(c)       ((c) == '_' || isalnum(c))
+#define nc_isparen_open(c)  ((c) == '(')
+#define nc_isparen_close(c) ((c) == ')')
+#define nc_isparen(c)       (nc_isparen_open(c) || nc_isparen_close(c))
+
+#define nc_iswhitespace(c)  ((c) == ' ' || (c) == '\n' || (c) == '\t')
+
+#define nc_isupper(c)    ((c) >= 'A' && (c) <= 'Z')
+#define nc_islower(c)    ((c) >= 'a' && (c) <= 'z')
+#define nc_isdigit(c)    ((c) >= '0' && (c) <= '9')
+
+#define nc_isalpha(c)    isalpha(c)
+#define nc_isalnum(c)    isalnum(c)
+
+#define nc_isidentbegin(c)  ((c) == '_' || nc_isalpha(c))
+#define nc_isident(c)       ((c) == '_' || nc_isalnum(c))
 #undef isdigit
-#define isdigit(c)       ((c) >= '0' && (c) <= '9')
-#define isfloat(c)       (isdigit(c) || (c) == '.' || (c) == '-')
+#define nc_isfloat(c)       (nc_isdigit(c) || (c) == '.' || (c) == '-')
 
 /* Assert Implementation */
 #define nc__PRIV__exception(fp, fmt, ext_met, ...)\
