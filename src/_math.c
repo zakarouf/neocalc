@@ -1,5 +1,6 @@
 #include <math.h>
 #include <z_/prep/map.h>
+#include <z_/prep/args.h>
 #define NC_DEVELOPMENT
 #include "nc.h"
 
@@ -10,6 +11,9 @@
 #define fn(name) zpp__CAT(ncm_, name)
 /* Function Define Template */
 #define defn(name) static z__f64 fn(name) (nc_State *s, char *rest_expr)
+/* Get start */
+#define _start_ z__Arr_getVal(s->stacks.v, z__Arr_getTop(s->stacks.retpoints).ret)
+#define _end_ z__Arr_getTopEmpty(s->stacks.v)
 
 /**
  * To lessen the pain of writing same function defination a dozen times.
@@ -35,31 +39,89 @@
 
 
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-defn_smap((sin, sin)
-       , (cos, cos)
-       , (tan, tan)
+defn_smap(
+    (sin, sin)
+  , (cos, cos)
+  , (tan, tan)
 
-       , (asin, asin)
-       , (acos, acos)
-       , (atan, atan)
+  , (asin, asin)
+  , (acos, acos)
+  , (atan, atan)
 
-       , (exp, exp)
-       , (exp2, exp2)
+  , (sinh, sinh)
+  , (cosh, cosh)
+  , (tanh, tanh)
 
-       , (log, log)
-       , (log10, log10)
-       , (log2, log2))
+  , (asinh, asinh)
+  , (acosh, acosh)
+  , (atanh, atanh)
 
-defn_mmap((mod, fmod, x[0], x[1])
-        , (pow, pow, x[0], x[1])
-        , (atan2, atan2, x[0], x[1]))
+  , (exp, exp)
+  , (exp2, exp2)
+  , (expm1, expm1)
 
+  , (log, log)
+  , (log10, log10)
+  , (log2, log2)
+  , (log1p, log1p)
+  , (logb, logb)
+
+  , (sqrt, sqrt)
+  , (cbrt, cbrt)
+);
+
+defn_mmap(
+    (mod, fmod, x[0], x[1])
+  , (pow, pow, x[0], x[1])
+  , (atan2, atan2, x[0], x[1])
+);
+
+defn(max) {
+    nc_float *start = &_start_;
+    nc_float *end = &_end_;
+
+    nc_float res = *start;
+    start += 1;
+
+    while(start < end) {
+        res = res > *start ? res : *start;
+        start += 1;
+    }
+    return res;
+}
+
+defn(min) {
+    nc_float *start = &_start_;
+    nc_float *end = &_end_;
+
+    nc_float res = *start;
+    start += 1;
+
+    while(start < end) {
+        res = res < *start ? res : *start;
+        start += 1;
+    }
+    return res;
+}
 
 void nc_State_defmath(nc_State *s) {
     #define f(x) nc_State_setfn(s, #x, fn(x));
     #define set(...) zpp__Args_map(f, __VA_ARGS__)
-    set(sin, cos, tan, asin, acos, atan,
-        exp, exp2, log, log10, log2);
 
+    /* Single */
+    set(
+        sin, cos, tan
+      , sinh, cosh, tanh
+      , asin, acos, atan
+      , asinh, acosh, atanh
+      , exp, exp2, expm1
+      , log, log10, log2, log1p, logb
+      , sqrt, cbrt
+    );
+
+    /* Two */
     set(mod, pow, atan2);
+
+    /* ... */
+    set(max, min);
 }
