@@ -137,33 +137,35 @@ void repl(nc_State *s)
     z__String_delete(&res_var);
 }
 
-#define cstr(s) z__Str(s, sizeof(s)-1)
-int main (z__i32 argc, char *argv[])
+int main (z__i32 argc, char const *argv[])
 {   
     nc_State *state = nc_State_new();
     extern void nc_State_defmath(nc_State *s);
     nc_State_defmath(state);
 
+    int do_repl = 0;
+
     /* Initialize repl if no arguments are given */
-    if(argc < 2) {
-        repl(state);
+    if(argc < 2) do_repl = 1;
+    z__String cmd = z__String_new(256);
+    nc_float res = 0;
 
-    /* Check for help */
-    } else if(argv[1][0] == '-' && argv[1][1] == 'h') {
-        fputs(NC_HELP "\n", stdout);
-
-    /* Do evaluation and exit */
-    } else {
-        nc_float res = 0;
-        z__String cmd = z__String_new(256);
-        for (z__i32 i = 1; i < argc; i++) {
-            z__String_replaceStr(&cmd, argv[i], strlen(argv[i]));
+    #define cstr(s) (s, sizeof(s)-1)
+    z__argp_start(argv, 1, argc) {
+        z__argp_ifarg(&do_repl, cstr("--repl"))
+        z__argp_elifarg_custom(cstr("-h")) {
+            fputs(NC_HELP "\n", stdout);
+            goto _L_return;
+        } else {
+            z__String_replaceStr(&cmd, z__argp_get(), strlen(z__argp_get()));
             nc_eval(state, &cmd, &res);
         }
-        z__String_delete(&cmd);
-        z__fprint(stdout, "%f\n", res);
     }
+    z__fprint(stdout, "%f\n", res);
 
+    _L_return:
+    z__String_delete(&cmd);
+    if(do_repl) repl(state);
     nc_State_delete(state);
 
     return EXIT_SUCCESS;
