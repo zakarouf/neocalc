@@ -20,12 +20,8 @@
 
 ### Requied Libraries
 
-- **libreadline**: For REPL
-
-- [z_](https://github.com/zakarouf/z_)
-  - String
-  - Variables
-  - Stack System
+- [Readline](https://tiswww.case.edu/php/chet/readline/rltop.html): For REPL
+- [z_](https://github.com/zakarouf/z_): For all the boilerplate stuff
 
 After fetching all the libraries run
 ```
@@ -44,7 +40,7 @@ This will create a binary `nc`.
 ```racket
 $ ./nc
 Welcome to neocalc (https://github.com/zakarouf/neocalc)
-neocalc 0.1.0 by zakarouf 2022-2023 (/q to exit)
+neocalc 0.2.1 by zakarouf 2022-2023 (/q to exit)
 > 13
 _ is 13.000000
 ```
@@ -113,3 +109,69 @@ _ is 1.000000
 _ is 9.000000
 ```
 
+### Built-in Functions
+
+There are various *'Built-in Functions'* avaliable from the get go.<br />
+They can be called, like so
+```c
+($sin _PI)
+```
+> Built-in functions are called using the dollarsign prefix `$`
+
+We can also create a our own functions, compile and bundle them with the program or load them as a on runtime as dynamic libraries.
+```c
+#define NC_DEVELOPMENT
+#include "nc.h"
+
+#define fn(name) _built_in__##name
+#define defn(name)\
+  static nc_float fn(name) (nc_State *s, char *rest_expr)
+
+defn(max) {
+  nc_float *x = &z__Arr_getVal(s->stacks.v, z__Arr_getTop(s->stacks.retpoints).ret),
+           *x_end = &z__Arr_getTopEmpty(s->stacks.v);
+  nc_float res = *x;
+  x++;
+  while(x < x_end) {
+    res = *x > res? *x: res;
+    x++;
+  }
+  return res;
+}
+
+void load_built_in(nc_State *s)
+{
+  nc_State_setfn(s, "max", fn(max));
+}
+```
+```c
+extern load_built_in(nc_State *s);
+int main (int argc, char const *argv[])
+{
+  nc_State *s = nc_State_new();
+  load_built_in(s);
+  
+  /**
+      Do Some Evaluation ...
+  */
+
+  nc_State_delete(s); 
+}
+```
+After Compiling we can use it as such,
+```c
+>>> neocalc
+Welcome to neocalc (https://github.com/zakarouf/neocalc)
+neocalc 0.2.1 by zakarouf, (`/q` to exit or `/h` for help)
+> ($max 2 5 21 1)
+_ is 21.000000
+```
+
+## Speed
+
+Its 36 to 40 times slower than a `c` compiled code. According to my findings it is due to `atof` function that is converting ascii numerials to float. Therefore I'll recommend using variables instead  of literals, variables are way faster, infact it can increase evaluation speed by 40%.
+<br />
+
+---
+Now that doesn't mean its not usable either, I mean *its still faster than any major interpretor language so*.
+Also I dont think `neocalc` calc is going to get any slower though, as a matter of fact just by doing several code changes for optimization, `neocalc` got 125% (god bless callgrind). So while adding new features its only gonna get faster :>
