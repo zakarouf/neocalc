@@ -59,7 +59,7 @@ They can be nested too!
 > (- 40 (* 12 4))
 _ is -8.000000
 > (- 40 (* 12 4) (/ 22 7) (+ 24 (- 20 77)))
-stdout:21.857143
+_ is 21.857143
 ```
 
 ### Defining Variables
