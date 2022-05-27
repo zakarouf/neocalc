@@ -266,6 +266,7 @@ static inline nc_float nc_State_call_fns(nc_State *s, const char *name, char *re
     if(fn == NULL) {
         nc_perr(s->logfp, "Built-in function `%s` does not exist", name);
         return 0;
+        return 0.0;
     }
     return (*fn)(s, rest_expr);
 }
