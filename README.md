@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/neocalc0.2.1.png" width="600"/>
+  <img src="docs/neocalc.png" width="600"/>
   <h1>neocalc</h1>
 
   A small lisp-like calculator with variables.
