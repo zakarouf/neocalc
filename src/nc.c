@@ -556,17 +556,18 @@ nc_float nc_runfile(nc_State *s, const char *name)
     z__i32 brac = 0;
     #define get() file.data[idx]
     while(get() != 0 || brac < 0) {
-        if(get() == '(') {
-            if(!brac) {
-                z__Arr_pushInc(&cmds);
-                z__Arr_getTop(cmds).start = &get();
-            }
-            brac ++;
-        } else if (get() == ')') {
-            brac --;
-            if(!brac) {
-                z__Arr_getTop(cmds).end = &get();
-            }
+        switch (get()) {
+            break; case '(':
+                if(!brac) {
+                    z__Arr_pushInc(&cmds);
+                    z__Arr_getTop(cmds).start = &get();
+                }
+                brac ++;
+            break; case ')':
+                brac --;
+                if(!brac) {
+                    z__Arr_getTop(cmds).end = &get();
+                }
         }
         idx ++;
     }
@@ -628,7 +629,10 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
                 get(tok) = 0;
                 
                 toknext(1);
-                if(get(tok) != '(') tok("(");
+                if(get(tok) != '(') {
+                    tok("(");
+                    toknext(-1);
+                }
 
                 z__u64 start = tok;
                 z__u64 brac = 1;

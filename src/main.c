@@ -81,7 +81,10 @@ void repl(nc_State *s)
             /**/
             if(line.data[0] == '/') {
                 switch (line.data[1]) {
-                    break; case 'q': goto _L_return;
+                    break; case 'q':{
+                        free(_e);
+                        goto _L_return;
+                    }
                     break; case 'v': {
                         char const *name = z__str_skipget_nonws(line.data + 2, line.lenUsed-2);
                         z__String_replaceStr(&res_var, name, (line.data + line.lenUsed) - name);
