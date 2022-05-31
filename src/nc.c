@@ -385,7 +385,7 @@ nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed
         nc_Stacks_push_val(&s->stacks, _pass[i]);
     }
 
-    z__u64 register tok;
+    z__u64 register tok = 0;
     z__u64 prevtok;
     nc_float res = 0;
     z__u64 brac = 0;
@@ -393,7 +393,7 @@ nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed
     _L_restart:;
     expr_state_load();
 
-    if(nc_iswhitespace(get(0))) {
+    if(nc_iswhitespace(get(tok))) {
         tokskip_whitespace();
     }
 
