@@ -17,6 +17,8 @@
 /* Neocalc */
 #define NC_IMPLEMENTATION
 #include "nc.h"
+
+#define NC_MATH_IMPLEMENTATION
 #include "nc_math.h"
 
 #define NC_VERSION  "0.2.1"

@@ -1,7 +1,10 @@
 #ifndef ZAKAROUF_NEOCALC_MATH_H
 #define ZAKAROUF_NEOCALC_MATH_H
 
+#if defined(NC_MATH_IMPLEMENTATION) && !defined(NC_DEVELOPMENT)
 #define NC_DEVELOPMENT
+#endif
+
 #include "nc.h"
 void nc_State_defmath(nc_State *s);
 
