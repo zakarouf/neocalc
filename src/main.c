@@ -15,6 +15,7 @@
 #include <z_/types/string.h>
 
 /* Neocalc */
+#define NC_IMPLEMENTATION
 #include "nc.h"
 
 /**/
@@ -66,7 +67,6 @@
 
 #define NC_REPL_PROMT "> "
 
-
 static
 void repl(nc_State *s)
 {
@@ -78,7 +78,8 @@ void repl(nc_State *s)
         if(_e) {
             add_history(_e);
             z__String line = z__String_bind(_e, strlen(_e));
-            /**/
+
+            /* REPL Command */
             if(line.data[0] == '/') {
                 switch (line.data[1]) {
                     break; case 'q':{
@@ -126,7 +127,11 @@ void repl(nc_State *s)
                         z__ansi_fmt((cl256_fg, 2)) "%f" z__ansi_fmt((plain)) "\n"
                             , res_var.data, *res);
                 } else {
-                    z__fprint(stdout, z__ansi_fmt((bold)) "Var `%s` is not set" z__ansi_fmt((plain)) "\n", res_var.data);
+                    z__fprint(stdout,
+                        z__ansi_fmt((bold))
+                        "Var `%s` is not set"
+                        z__ansi_fmt((plain)) "\n", res_var.data);
+
                     z__String_replaceStr(&res_var, "_", 1);
                 }
             }
