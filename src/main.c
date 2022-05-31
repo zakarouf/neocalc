@@ -17,8 +17,8 @@
 /* Neocalc */
 #define NC_IMPLEMENTATION
 #include "nc.h"
+#include "nc_math.h"
 
-/**/
 #define NC_VERSION  "0.2.1"
 #define NC_YEAR     "2022-2023"
 #define NC_HOSTPAGE "https://github.com/zakarouf/neocalc"
@@ -148,7 +148,6 @@ void repl(nc_State *s)
 int main (z__i32 argc, char const *argv[])
 {   
     nc_State *state = nc_State_new();
-    extern void nc_State_defmath(nc_State *s);
     nc_State_defmath(state);
 
     int do_repl = 0, hide_out = 0;

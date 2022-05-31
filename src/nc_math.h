@@ -1,11 +1,17 @@
-#include <math.h>
-#include <z_/prep/map.h>
-#include <z_/prep/args.h>
+#ifndef ZAKAROUF_NEOCALC_MATH_H
+#define ZAKAROUF_NEOCALC_MATH_H
+
 #define NC_DEVELOPMENT
 #include "nc.h"
+void nc_State_defmath(nc_State *s);
 
+#ifdef NC_MATH_IMPLEMENTATION
 /* Mafs */
 #include <tgmath.h>
+
+/* Macro stuff */
+#include <z_/prep/map.h>
+#include <z_/prep/args.h>
 
 /* Name_space */
 #define fn(name) zpp__CAT(ncm_, name)
@@ -104,7 +110,8 @@ defn(min) {
     return res;
 }
 
-void nc_State_defmath(nc_State *s) {
+void nc_State_defmath(nc_State *s)
+{
     #define f(x) nc_State_setfn(s, #x, fn(x));
     #define set(...) zpp__Args_map(f, __VA_ARGS__)
 
@@ -125,3 +132,8 @@ void nc_State_defmath(nc_State *s) {
     /* ... */
     set(max, min);
 }
+
+#endif // NC_MATH_IMPLEMENTATION
+
+#endif
+
