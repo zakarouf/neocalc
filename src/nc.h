@@ -17,6 +17,7 @@ long nc_State_getexpr_id(nc_State *s, const char *name);
 
 nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed);
 int nc_eval(nc_State *s, z__String *nc_cmd, nc_float *res);
+nc_float nc_runString(nc_State *s, z__String *str);
 nc_float nc_runfile(nc_State *s, const char *name);
 
 void nc_printall_data(nc_State *s);
@@ -570,7 +571,7 @@ nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed
         #define ast_data_print(...) 
         #define ast_tgprint(...) 
  
-    #endif
+    #endif // NC_AST
 
     /**
      * Expressions are evaluated on a single layer without
@@ -743,46 +744,51 @@ nc_float nc_eval_expr(nc_State *s, long expr_id, nc_float *_pass, z__u64 _passed
     #undef get
 }
 
-nc_float nc_runfile(nc_State *s, const char *name)
+nc_float nc_runString(nc_State *s, z__String *str)
 {
-    z__String file = z__String_newFromFile(name);
-    if(!file.data) {
-        nc_perr(s->logfp, "Cannot Load File %s", name);
-        return 0;
-    }
-    z__Arr(z__Vector(char, *start, *end)) cmds;
-    z__Arr_new(&cmds, 32);
     z__u32 idx = 0;
     z__i32 brac = 0;
-    #define get() file.data[idx]
+    nc_float res = 0;
+
+    char *start = str->data;
+    char *end = str->data;
+
+    #undef get
+    #define get() str->data[idx]
     while(get() != 0 || brac < 0) {
         switch (get()) {
             break; case '(':
                 if(!brac) {
-                    z__Arr_pushInc(&cmds);
-                    z__Arr_getTop(cmds).start = &get();
+                    start = str->data + idx;
                 }
                 brac ++;
             break; case ')':
                 brac --;
                 if(!brac) {
-                    z__Arr_getTop(cmds).end = &get();
+                    end = str->data + idx;
+                    z__String cmd = z__String_bind(start, end - start);
+                    nc_eval(s, &cmd, &res);
                 }
         }
         idx ++;
     }
-
-    nc_float res = 0;
-    z__Arr_foreach(i, cmds) {
-        z__String cmd = z__String_bind(i->start, i->end - i->start+1);
-        nc_eval(s, &cmd, &res);
-    }
-    z__Arr_delete(&cmds);
-    z__String_delete(&file);
-
     return res;
 
     #undef get
+
+}
+
+nc_float nc_runfile(nc_State *s, const char *name)
+{    
+    z__String file = z__String_newFromFile(name);
+    if(!file.data) {
+        nc_perr(s->logfp, "Cannot Load File %s", name);
+        return 0;
+    }
+    nc_float res = nc_runString(s, &file);
+    z__String_delete(&file);
+
+    return res;
 }
 
 int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
@@ -965,7 +971,7 @@ int nc_eval(nc_State *s, z__String *cmd, nc_float *res)
     return 0;
 }
 
-#endif
+#endif // NC_IMPLEMENTATION
 
 #endif // ZAKAROUF_NEOCALC_H
 
